@@ -23,6 +23,7 @@ if(WIN32)
     src/win_common.cpp
     src/native_host.cpp
     src/registration.cpp
+    src/setup_window.cpp
     src/win_resources.rc
   )
   target_link_libraries(glint PRIVATE glint_core user32 shell32 comctl32 advapi32 ole32)
@@ -45,6 +46,18 @@ if(GLINT_BUILD_TESTS)
     set_property(TARGET glint_core_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
   endif()
   add_test(NAME glint_core COMMAND glint_core_tests)
+
+  if(WIN32)
+    add_executable(glint_registration_tests tests/test_registration.cpp src/registration.cpp src/win_common.cpp)
+    target_include_directories(glint_registration_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(glint_registration_tests PRIVATE glint_core advapi32)
+    target_compile_features(glint_registration_tests PRIVATE cxx_std_20)
+    if(MSVC)
+      target_compile_options(glint_registration_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+      set_property(TARGET glint_registration_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_registration COMMAND glint_registration_tests)
+  endif()
 endif()
 
 if(WIN32)

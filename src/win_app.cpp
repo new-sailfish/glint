@@ -1,6 +1,8 @@
 #include "win_app.hpp"
 
 #include "glint/core.hpp"
+#include "registration.hpp"
+#include "setup_window.hpp"
 #include "win_common.hpp"
 
 #include <windows.h>
@@ -27,10 +29,12 @@ namespace {
 
 constexpr UINT WM_PIPE_EVENT = WM_APP + 1;
 constexpr UINT WM_TRAY_EVENT = WM_APP + 2;
+constexpr UINT WM_SHOW_SETUP = WM_APP + 3;
 constexpr UINT ID_HOTKEY = 1;
 constexpr UINT ID_TRAY_SHOW = 1001;
 constexpr UINT ID_TRAY_HOTKEY = 1002;
 constexpr UINT ID_TRAY_EXIT = 1003;
+constexpr UINT ID_TRAY_SETUP = 1004;
 constexpr wchar_t kClassName[] = L"Glint.SearchWindow";
 
 struct PipeClient {
@@ -189,13 +193,16 @@ public:
                          [this](ConnectionId id) { disconnected(id); }) {}
     ~DesktopApp() { shutdown(); }
 
-    int run() {
+    int run(bool open_setup) {
         INITCOMMONCONTROLSEX controls{sizeof(controls), ICC_LISTVIEW_CLASSES};
         InitCommonControlsEx(&controls);
         if (!create_window()) return 1;
         pipe_.start();
+        setup_ = std::make_unique<SetupWindow>(window_, [this] { show_search(); });
+        if (open_setup || setup::should_show_onboarding(setup::onboarding_dismissed(), setup::read_registration())) show_setup();
         MSG message;
         while (GetMessageW(&message, nullptr, 0, 0) > 0) {
+            if (setup_->translate(message)) continue;
             if (message.message == WM_KEYDOWN && (GetFocus() == edit_ || GetFocus() == list_)) {
                 if (message.wParam == VK_ESCAPE) { hide_search(); continue; }
                 if (message.wParam == VK_RETURN) { activate_selected(); continue; }
@@ -223,6 +230,8 @@ private:
     HWND edit_ = nullptr;
     HWND list_ = nullptr;
     HWND status_ = nullptr;
+    HWND setup_button_ = nullptr;
+    std::unique_ptr<SetupWindow> setup_;
     NOTIFYICONDATAW tray_{};
     UINT taskbar_created_ = 0;
     bool tray_added_ = false;
@@ -244,11 +253,13 @@ private:
         if (!self) return DefWindowProcW(hwnd, message, wparam, lparam);
         if (message == self->taskbar_created_) { self->add_tray(); return 0; }
         switch (message) {
+        case WM_SHOW_SETUP: self->show_setup(); return 0;
         case WM_HOTKEY: self->show_search(); return 0;
         case WM_COMMAND:
             if (HIWORD(wparam) == EN_CHANGE && reinterpret_cast<HWND>(lparam) == self->edit_) { self->refresh_results(); return 0; }
             if (LOWORD(wparam) == ID_TRAY_SHOW) { self->show_search(); return 0; }
             if (LOWORD(wparam) == ID_TRAY_HOTKEY) { self->configure_hotkey(); return 0; }
+            if (LOWORD(wparam) == ID_TRAY_SETUP) { self->show_setup(); return 0; }
             if (LOWORD(wparam) == ID_TRAY_EXIT) { DestroyWindow(hwnd); return 0; }
             break;
         case WM_KEYDOWN:
@@ -291,9 +302,12 @@ private:
                                 12, 52, 860, 420, window_, nullptr, klass.hInstance, nullptr);
         status_ = CreateWindowExW(0, L"STATIC", L"浏览器尚未连接", WS_CHILD | WS_VISIBLE,
                                    12, 478, 860, 24, window_, nullptr, klass.hInstance, nullptr);
+        setup_button_ = CreateWindowExW(0, L"BUTTON", L"连接浏览器", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+            752, 478, 120, 26, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_TRAY_SETUP)), klass.hInstance, nullptr);
         SendMessageW(edit_, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
         SendMessageW(list_, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
         SendMessageW(status_, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
+        SendMessageW(setup_button_, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
         ListView_SetExtendedListViewStyle(list_, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
         const wchar_t* headers[] = {L"标题", L"网址", L"浏览器 / 配置"};
         const int widths[] = {280, 420, 170};
@@ -304,6 +318,7 @@ private:
         }
         tray_.cbSize = sizeof(tray_); tray_.hWnd = window_; tray_.uID = 1; tray_.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP; tray_.uCallbackMessage = WM_TRAY_EVENT;
         tray_.hIcon = LoadIconW(nullptr, IDI_APPLICATION); wcscpy_s(tray_.szTip, L"Glint 标签页搜索"); add_tray();
+        layout();
         return true;
     }
 
@@ -317,7 +332,8 @@ private:
         const int height = rect.bottom - rect.top;
         MoveWindow(edit_, 12, 12, width - 24, 30, TRUE);
         MoveWindow(list_, 12, 52, width - 24, height - 92, TRUE);
-        MoveWindow(status_, 12, height - 32, width - 24, 24, TRUE);
+        MoveWindow(status_, 12, height - 32, width - 160, 24, TRUE);
+        MoveWindow(setup_button_, width - 140, height - 34, 128, 26, TRUE);
     }
 
     void show_search() {
@@ -325,9 +341,16 @@ private:
     }
     void hide_search() { ShowWindow(window_, SW_HIDE); }
 
+    void show_setup() {
+        if (!setup_) return;
+        setup_->update_connection(index_.connection_count(), index_.tab_count(), hotkey_name(kHotkeys[hotkey_index_]));
+        setup_->show();
+    }
+
     void show_tray_menu() {
         HMENU menu = CreatePopupMenu();
         AppendMenuW(menu, MF_STRING, ID_TRAY_SHOW, L"显示搜索");
+        AppendMenuW(menu, MF_STRING, ID_TRAY_SETUP, L"连接浏览器（安装引导）");
         AppendMenuW(menu, MF_STRING, ID_TRAY_HOTKEY, L"配置全局热键");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING, ID_TRAY_EXIT, L"退出 Glint");
@@ -346,6 +369,7 @@ private:
             return;
         }
         hotkey_index_ = next; save_hotkey_index(next);
+        if (setup_) setup_->update_connection(index_.connection_count(), index_.tab_count(), hotkey_name(kHotkeys[hotkey_index_]));
     }
 
     void refresh_results() {
@@ -366,7 +390,7 @@ private:
         }
         SendMessageW(list_, WM_SETREDRAW, TRUE, 0); InvalidateRect(list_, nullptr, FALSE);
         std::wstring text;
-        if (index_.connection_count() == 0) text = L"浏览器尚未连接";
+        if (index_.connection_count() == 0) text = L"浏览器尚未连接，点击“连接浏览器”安装扩展。";
         else if (rows_.empty() && !query.empty()) text = L"没有匹配结果";
         else text = std::to_wstring(rows_.size()) + L" 个标签页";
         SetWindowTextW(status_, text.c_str());
@@ -418,23 +442,33 @@ private:
             } catch (const ProtocolError&) {}
         }
         if (IsWindowVisible(window_)) refresh_results();
+        if (setup_) setup_->update_connection(index_.connection_count(), index_.tab_count(), hotkey_name(kHotkeys[hotkey_index_]));
     }
 
     void shutdown() {
         if (!window_) return;
+        setup_.reset();
         UnregisterHotKey(window_, ID_HOTKEY); remove_tray(); pipe_.stop(); window_ = nullptr;
     }
 };
 
 } // namespace
 
-int run_desktop() {
+int run_desktop(bool open_setup) {
     const std::wstring mutex_name = L"Local\\Glint.Desktop." + win::current_user_sid();
     HANDLE mutex = CreateMutexW(nullptr, TRUE, mutex_name.c_str());
     if (!mutex) return 1;
-    if (GetLastError() == ERROR_ALREADY_EXISTS) { CloseHandle(mutex); return 0; }
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        if (HWND existing = FindWindowW(kClassName, nullptr)) {
+            DWORD process = 0;
+            GetWindowThreadProcessId(existing, &process);
+            AllowSetForegroundWindow(process);
+            PostMessageW(existing, open_setup ? WM_SHOW_SETUP : WM_HOTKEY, 0, 0);
+        }
+        CloseHandle(mutex); return 0;
+    }
     DesktopApp app;
-    const int result = app.run();
+    const int result = app.run(open_setup);
     CloseHandle(mutex);
     return result;
 }

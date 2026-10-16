@@ -68,6 +68,7 @@
       this.index = new Map();
       this.reconnectAttempt = 0;
       this.reconnectTimer = null;
+      this.lastError = '';
     }
 
     attachListeners() {
@@ -169,17 +170,34 @@
         this.port = port;
         this.connected = true;
         port.onMessage && port.onMessage.addListener(message => { void this.handleMessage(message); });
-        port.onDisconnect && port.onDisconnect.addListener(() => this.handleDisconnect(port));
+        port.onDisconnect && port.onDisconnect.addListener(() => {
+          // Read lastError in this callback so Chrome does not report it as unhandled.
+          const error = this.api.runtime.lastError;
+          this.lastError = error && error.message ? error.message : 'Native messaging connection closed.';
+          this.handleDisconnect(port);
+        });
+        this.lastError = '';
         this.sendHello();
 
         await this.syncSnapshot();
         this.reconnectAttempt = 0;
       } catch (error) {
+        this.lastError = String(error && error.message || error);
         this.logger('native connection failed', error);
         this.handleDisconnect(this.port);
       } finally {
         this.connecting = false;
       }
+    }
+
+    async retryConnect() {
+      if (this.connected) return this.syncSnapshot();
+      if (this.reconnectTimer !== null) {
+        this.clearSchedule(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      this.reconnectAttempt = 0;
+      return this.connect();
     }
 
     handleDisconnect(port) {

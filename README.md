@@ -32,9 +32,17 @@ desktop output; native-host protocol output is reserved for frames.
 
 ## Register the native host (current user)
 
-After loading the unpacked extension in each target profile (see the next
-section), choose the extension IDs shown on `chrome://extensions` and
-`edge://extensions` in Developer mode:
+The first desktop launch opens a native **连接浏览器** guide when no browser
+has been configured. It explains the steps, opens the local extension folder,
+accepts Chrome and Edge extension IDs, and registers the current-user host.
+The same guide is available from the search window's **连接浏览器** button or
+the tray menu. **开始搜索** becomes available after a browser profile sends its
+first snapshot; a registered host alone does not mean that the browser is
+connected.
+
+You can also register from PowerShell. First load the unpacked extension in
+each target profile (see the next section), then choose the extension IDs shown
+on `chrome://extensions` and `edge://extensions` in Developer mode:
 
 ```powershell
 build\release\Release\Glint.exe --register `
@@ -51,19 +59,41 @@ executable path changes, run the command again. To remove the registration:
 build\release\Release\Glint.exe --unregister
 ```
 
+To reopen the desktop guide directly after choosing **稍后设置**:
+
+```powershell
+build\release\Release\Glint.exe --setup
+```
+
 The registration command does not need administrator rights. The checked-in
 `extension/host-manifest.chrome.json` and `.edge.json` files are templates for
 manual registration; replace the path and extension ID if using them directly.
 
 ## Load the extension during development
 
-1. Build the executable.
-2. Open `chrome://extensions` or `edge://extensions`.
-3. Enable Developer mode and choose **Load unpacked**.
-4. Select the repository's `extension` directory.
-5. Repeat for each browser profile that should be indexed.
-6. Optionally open the extension options page and set a profile label.
-7. Run the registration command above with the IDs shown for the loaded extensions.
+1. Build the executable and keep the repository's `extension` directory (or
+   the packaged `extension` directory) beside it.
+2. In the target Chrome profile, open `chrome://extensions`; in Edge, open
+   `edge://extensions`.
+3. Enable **Developer mode**, choose **Load unpacked** / **加载已解压的扩展程序**,
+   and select the `extension` directory itself.
+4. Open the extension's **Details → Extension options** page. The Glint page
+   opens automatically after the first installation and can later be reopened
+   from the pinned toolbar icon. Click **复制 ID**.
+5. Return to Glint's **连接浏览器** guide, paste the ID into the matching
+   Chrome or Edge field, and click **保存并注册**. This writes HKCU registry
+   entries and a host manifest; no administrator permission is needed.
+6. Return to the extension page and click **重试连接**. Confirm that Glint's
+   search list shows the profile's tabs, then use `Ctrl+Shift+Space` (or the
+   configured hotkey) to search.
+7. Repeat steps 2–6 in every browser profile whose tabs should be searchable.
+   A profile without the extension is intentionally absent from the index.
+
+The extension only reads tab metadata. It never reads page contents. Chrome and
+Edge may use different IDs, and a changed extension path or ID requires running
+**保存并注册** again. For a release package, do not delete or move the
+`extension` directory after loading it; the browser must be able to start the
+same unpacked extension on the next launch.
 
 The extension sends a complete snapshot after every connection and rebuilds
 the index after a browser or desktop restart. Closing a tab, moving it between
