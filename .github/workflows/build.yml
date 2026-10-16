@@ -23,12 +23,12 @@ jobs:
         run: ctest --preset release --output-on-failure
       - name: Check imports
         shell: pwsh
-        run: .\scripts\check-imports.ps1 -Binary .\build\release\Glint.exe
+        run: .\scripts\check-imports.ps1 -Binary .\build\release\Release\Glint.exe
       - name: Package
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item .\build\release\Glint.exe dist\Glint.exe
+          Copy-Item .\build\release\Release\Glint.exe dist\Glint.exe
           Copy-Item .\extension dist\extension -Recurse
           Copy-Item .\README.md dist\README.md
           Compress-Archive -Path dist\Glint.exe,dist\extension,dist\README.md -DestinationPath Glint-win-x64.zip -Force

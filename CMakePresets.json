@@ -4,11 +4,10 @@
     {
       "name": "release",
       "displayName": "Release x64",
-      "generator": "Ninja",
+      "generator": "Visual Studio 17 2022",
       "binaryDir": "${sourceDir}/build/release",
-      "architecture": {"value": "x64", "strategy": "external"},
+      "architecture": "x64",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
         "GLINT_BUILD_TESTS": "ON"
       }
@@ -18,7 +17,7 @@
       "displayName": "Debug x64",
       "inherits": "release",
       "binaryDir": "${sourceDir}/build/debug",
-      "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug", "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreadedDebug"}
+      "cacheVariables": {"CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreadedDebug"}
     }
   ],
   "buildPresets": [
@@ -26,7 +25,7 @@
     {"name": "debug", "configurePreset": "debug", "configuration": "Debug"}
   ],
   "testPresets": [
-    {"name": "release", "configurePreset": "release", "output": {"outputOnFailure": true}},
-    {"name": "debug", "configurePreset": "debug", "output": {"outputOnFailure": true}}
+    {"name": "release", "configurePreset": "release", "configuration": "Release", "output": {"outputOnFailure": true}},
+    {"name": "debug", "configurePreset": "debug", "configuration": "Debug", "output": {"outputOnFailure": true}}
   ]
 }

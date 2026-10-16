@@ -16,7 +16,7 @@ optional local label.
 
 ## Build on Windows
 
-Use a VS 2022 x64 developer prompt with CMake 3.21+ and Ninja:
+Use a VS 2022 x64 developer prompt with CMake 3.21+:
 
 ```powershell
 cmake --preset release
@@ -36,7 +36,7 @@ After building, choose the extension IDs shown on `chrome://extensions` and
 `edge://extensions` in Developer mode:
 
 ```powershell
-build\release\Glint.exe --register `
+build\release\Release\Glint.exe --register `
   --chrome-id abcdefghijklmnopqrstuvwxyzabcdef `
   --edge-id abcdefghijklmnopqrstuvwxyzabcdef
 ```
@@ -47,7 +47,7 @@ This writes manifests below `%LOCALAPPDATA%\Glint` and registers both
 executable path changes, run the command again. To remove the registration:
 
 ```powershell
-build\release\Glint.exe --unregister
+build\release\Release\Glint.exe --unregister
 ```
 
 The registration command does not need administrator rights. The checked-in
