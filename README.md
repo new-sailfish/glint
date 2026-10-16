@@ -32,7 +32,8 @@ desktop output; native-host protocol output is reserved for frames.
 
 ## Register the native host (current user)
 
-After building, choose the extension IDs shown on `chrome://extensions` and
+After loading the unpacked extension in each target profile (see the next
+section), choose the extension IDs shown on `chrome://extensions` and
 `edge://extensions` in Developer mode:
 
 ```powershell
@@ -56,12 +57,13 @@ manual registration; replace the path and extension ID if using them directly.
 
 ## Load the extension during development
 
-1. Build and register the host.
+1. Build the executable.
 2. Open `chrome://extensions` or `edge://extensions`.
 3. Enable Developer mode and choose **Load unpacked**.
 4. Select the repository's `extension` directory.
 5. Repeat for each browser profile that should be indexed.
 6. Optionally open the extension options page and set a profile label.
+7. Run the registration command above with the IDs shown for the loaded extensions.
 
 The extension sends a complete snapshot after every connection and rebuilds
 the index after a browser or desktop restart. Closing a tab, moving it between
