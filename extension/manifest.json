@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Glint Tab Search Connector",
+  "description": "Connects this Chrome or Edge profile's open tabs to Glint.",
+  "version": "0.1.0",
+  "minimum_chrome_version": "88",
+  "permissions": ["tabs", "nativeMessaging", "storage"],
+  "background": { "service_worker": "background.js" },
+  "options_page": "options.html",
+  "action": { "default_title": "Glint" }
+}

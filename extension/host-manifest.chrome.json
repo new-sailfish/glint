@@ -1,0 +1,9 @@
+{
+  "name": "com.glint.host",
+  "description": "Glint tab search native messaging host",
+  "path": "C:\\Path\\To\\Glint.exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://__CHROME_EXTENSION_ID__/*"
+  ]
+}
