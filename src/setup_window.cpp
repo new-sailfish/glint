@@ -1,5 +1,6 @@
 #include "setup_window.hpp"
 
+#include "extension_bundle.hpp"
 #include "registration.hpp"
 
 #include <commctrl.h>
@@ -21,6 +22,9 @@ enum : int {
 };
 
 std::filesystem::path extension_directory() {
+    std::filesystem::path bundled;
+    std::wstring extraction_error;
+    if (extension_bundle::ensure_extracted(bundled, extraction_error)) return bundled;
     std::wstring exe(32768, L'\0');
     const auto count = GetModuleFileNameW(nullptr, exe.data(), static_cast<DWORD>(exe.size()));
     exe.resize(count);

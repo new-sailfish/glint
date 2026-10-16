@@ -71,8 +71,17 @@ manual registration; replace the path and extension ID if using them directly.
 
 ## Load the extension during development
 
-1. Build the executable and keep the repository's `extension` directory (or
-   the packaged `extension` directory) beside it.
+Chrome and Edge do not allow a regular desktop program to silently install an
+unpacked extension. Glint therefore embeds the extension, releases it to a
+stable per-user directory, and opens the browser's extension page from the
+first-run guide; the user still makes the one-time **Load unpacked** choice.
+Enterprise-managed browser policies or a signed store package can provide a
+fully automatic install, but they are outside this release.
+
+1. Build the executable. The release EXE contains the extension files and
+   prepares a stable copy at `%LOCALAPPDATA%\\Glint\\extension` on startup.
+   The repository/package `extension` directory remains available as a
+   transparent manual fallback.
 2. In the target Chrome profile, open `chrome://extensions`; in Edge, open
    `edge://extensions`.
 3. Enable **Developer mode**, choose **Load unpacked** / **加载已解压的扩展程序**,
@@ -91,9 +100,11 @@ manual registration; replace the path and extension ID if using them directly.
 
 The extension only reads tab metadata. It never reads page contents. Chrome and
 Edge may use different IDs, and a changed extension path or ID requires running
-**保存并注册** again. For a release package, do not delete or move the
-`extension` directory after loading it; the browser must be able to start the
-same unpacked extension on the next launch.
+**保存并注册** again. For a release package, the extracted
+`%LOCALAPPDATA%\\Glint\\extension` directory is the recommended path. Glint
+refreshes it from the EXE when the embedded extension changes, so moving the
+EXE does not invalidate the loaded extension path. The browser must be able to
+start that unpacked extension on the next launch.
 
 The extension sends a complete snapshot after every connection and rebuilds
 the index after a browser or desktop restart. Closing a tab, moving it between

@@ -1,0 +1,7 @@
+#include <windows.h>
+
+101 RCDATA "..\\extension\\manifest.json"
+102 RCDATA "..\\extension\\background.js"
+103 RCDATA "..\\extension\\background-core.js"
+104 RCDATA "..\\extension\\options.html"
+105 RCDATA "..\\extension\\options.js"

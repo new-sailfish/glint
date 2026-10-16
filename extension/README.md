@@ -4,7 +4,10 @@ Chrome 和 Edge 共用这个 Manifest V3 扩展。扩展只读取标签页元数
 
 ## 安装和连接
 
-1. 将 Glint 安装包解压到准备长期保留的位置，运行 `Glint.exe`。自行构建时，请先按项目根目录 README 生成 EXE。保留 `extension` 文件夹，浏览器需要从该位置持续读取扩展文件。
+Chrome 和 Edge 出于安全原因不允许普通桌面程序静默安装“未打包扩展”。
+Glint 会把扩展内置在 EXE 中并自动释放、打开扩展管理页；用户仍需在目标配置文件中点击一次“加载已解压的扩展程序”。
+
+1. 将 Glint 安装包解压到准备长期保留的位置，运行 `Glint.exe`。自行构建时，请先按项目根目录 README 生成 EXE。Glint 会把 EXE 内置的扩展释放到 `%LOCALAPPDATA%\\Glint\\extension`；也可以直接选择安装包或仓库中的 `extension` 文件夹。
 2. 在需要接入的浏览器配置文件中打开扩展管理页面：Chrome 为 `chrome://extensions`，Edge 为 `edge://extensions`。
 3. 开启**开发者模式**，选择**加载已解压的扩展程序**（也可能显示为“加载解压缩的扩展”或 “Load unpacked”），选中这个 `extension` 文件夹。不要选择上一级目录。
 4. 首次安装会自动打开中文引导页。点击**复制 ID**，回到桌面端 Glint 的**连接浏览器**窗口，将 ID 粘贴到对应的 Chrome / Edge 输入框，点击**保存并注册**。以后可从 Glint 托盘菜单重新打开此窗口。
