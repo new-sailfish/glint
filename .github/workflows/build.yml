@@ -1,0 +1,43 @@
+name: Build Glint
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Test extension
+        run: npm --prefix extension test
+      - name: Configure Release x64
+        run: cmake --preset release
+      - name: Build Release x64
+        run: cmake --build --preset release --parallel
+      - name: Test C++ core
+        run: ctest --preset release --output-on-failure
+      - name: Check imports
+        shell: pwsh
+        run: .\scripts\check-imports.ps1 -Binary .\build\release\Glint.exe
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item .\build\release\Glint.exe dist\Glint.exe
+          Copy-Item .\extension dist\extension -Recurse
+          Copy-Item .\README.md dist\README.md
+          Compress-Archive -Path dist\Glint.exe,dist\extension,dist\README.md -DestinationPath Glint-win-x64.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Glint-win-x64
+          path: Glint-win-x64.zip
+      - name: Upload release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Glint-win-x64.zip

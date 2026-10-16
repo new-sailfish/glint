@@ -22,6 +22,13 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         else if (argument == L"--edge-id" && i + 1 < count) edge_id = arguments[++i];
     }
     if (arguments) LocalFree(arguments);
+    // Native Messaging launches this executable without arguments and connects
+    // its standard handles to pipes. Desktop mode has no such handles.
+    if (!native && !register_host && !unregister_host) {
+        const auto input_type = GetFileType(GetStdHandle(STD_INPUT_HANDLE));
+        const auto output_type = GetFileType(GetStdHandle(STD_OUTPUT_HANDLE));
+        native = input_type == FILE_TYPE_PIPE && output_type == FILE_TYPE_PIPE;
+    }
     if (native) return glint::run_native_host();
     if (register_host || unregister_host) return glint::run_register(unregister_host, chrome_id.c_str(), edge_id.c_str());
     return glint::run_desktop();

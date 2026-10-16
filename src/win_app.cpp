@@ -70,14 +70,22 @@ public:
                                    OPEN_EXISTING, 0, nullptr);
         if (wake != INVALID_HANDLE_VALUE) CloseHandle(wake);
         if (thread_.joinable()) thread_.join();
-        std::lock_guard lock(mutex_);
-        for (auto& [id, client] : clients_) {
+        std::unordered_map<ConnectionId, std::shared_ptr<PipeClient>> clients;
+        {
+            std::lock_guard lock(mutex_);
+            clients.swap(clients_);
+        }
+        for (auto& [id, client] : clients) {
             (void)id;
-            FlushFileBuffers(client->handle);
             DisconnectNamedPipe(client->handle);
             CloseHandle(client->handle);
         }
-        clients_.clear();
+        std::vector<std::thread> client_threads;
+        {
+            std::lock_guard lock(thread_mutex_);
+            client_threads.swap(client_threads_);
+        }
+        for (auto& client_thread : client_threads) if (client_thread.joinable()) client_thread.join();
     }
 
 private:
@@ -87,6 +95,8 @@ private:
     std::thread thread_;
     std::mutex mutex_;
     std::unordered_map<ConnectionId, std::shared_ptr<PipeClient>> clients_;
+    std::mutex thread_mutex_;
+    std::vector<std::thread> client_threads_;
     std::atomic<ConnectionId> next_id_ = 1;
 
     HANDLE make_server_pipe() {
@@ -95,7 +105,7 @@ private:
         if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.c_str(), SDDL_REVISION_1, &descriptor, nullptr)) return INVALID_HANDLE_VALUE;
         SECURITY_ATTRIBUTES attributes{sizeof(attributes), descriptor, FALSE};
         HANDLE pipe = CreateNamedPipeW(win::pipe_name().c_str(), PIPE_ACCESS_DUPLEX,
-            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, PIPE_UNLIMITED_INSTANCES,
+            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, PIPE_UNLIMITED_INSTANCES,
             1024 * 1024, 1024 * 1024, 0, &attributes);
         LocalFree(descriptor);
         return pipe;
@@ -115,7 +125,8 @@ private:
                 std::lock_guard lock(mutex_);
                 clients_.emplace(client->id, client);
             }
-            std::thread([this, client] { client_loop(client); }).detach();
+            std::lock_guard lock(thread_mutex_);
+            client_threads_.emplace_back([this, client] { client_loop(client); });
         }
     }
 
@@ -132,12 +143,12 @@ private:
             } catch (const ProtocolError&) { valid = false; break; }
         }
         (void)valid;
-        DisconnectNamedPipe(client->handle);
-        CloseHandle(client->handle);
+        bool close_handle = false;
         {
             std::lock_guard lock(mutex_);
-            clients_.erase(client->id);
+            close_handle = clients_.erase(client->id) != 0;
         }
+        if (close_handle) { DisconnectNamedPipe(client->handle); CloseHandle(client->handle); }
         on_disconnect_(client->id);
     }
 };
@@ -185,6 +196,22 @@ public:
         pipe_.start();
         MSG message;
         while (GetMessageW(&message, nullptr, 0, 0) > 0) {
+            if (message.message == WM_KEYDOWN && (GetFocus() == edit_ || GetFocus() == list_)) {
+                if (message.wParam == VK_ESCAPE) { hide_search(); continue; }
+                if (message.wParam == VK_RETURN) { activate_selected(); continue; }
+                if (GetFocus() == edit_ && (message.wParam == VK_DOWN || message.wParam == VK_UP)) {
+                    SetFocus(list_);
+                    const int count = ListView_GetItemCount(list_);
+                    if (count > 0) {
+                        int selected = ListView_GetNextItem(list_, -1, LVNI_SELECTED);
+                        selected = message.wParam == VK_DOWN ? (selected < 0 ? 0 : min(selected + 1, count - 1))
+                                                              : (selected < 0 ? count - 1 : max(selected - 1, 0));
+                        ListView_SetItemState(list_, selected, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+                        ListView_EnsureVisible(list_, selected, FALSE);
+                    }
+                    continue;
+                }
+            }
             TranslateMessage(&message);
             DispatchMessageW(&message);
         }
@@ -324,20 +351,20 @@ private:
     void refresh_results() {
         if (!edit_ || !list_) return;
         const int length = GetWindowTextLengthW(edit_);
-        std::wstring query(static_cast<std::size_t>(length), L'\0');
-        if (length) GetWindowTextW(edit_, query.data(), length + 1);
+        std::wstring query(static_cast<std::size_t>(length) + 1, L'\0');
+        if (length) { GetWindowTextW(edit_, query.data(), length + 1); query.resize(static_cast<std::size_t>(length)); }
         rows_ = index_.search(query);
-        ListView_SetRedraw(list_, FALSE); ListView_DeleteAllItems(list_);
+        SendMessageW(list_, WM_SETREDRAW, FALSE, 0); ListView_DeleteAllItems(list_);
         for (std::size_t i = 0; i < rows_.size(); ++i) {
             const auto& row = rows_[i];
             LVITEMW item{LVIF_TEXT, static_cast<int>(i), 0, 0, 0, const_cast<LPWSTR>(row.title.c_str()), 0, 0, 0};
-            ListView_InsertItemW(list_, &item);
+            ListView_InsertItem(list_, &item);
             ListView_SetItemText(list_, static_cast<int>(i), 1, const_cast<LPWSTR>(row.url.c_str()));
             std::wstring source = row.browser;
             if (!row.profile_label.empty()) source += L" / " + row.profile_label;
             ListView_SetItemText(list_, static_cast<int>(i), 2, const_cast<LPWSTR>(source.c_str()));
         }
-        ListView_SetRedraw(list_, TRUE); InvalidateRect(list_, nullptr, FALSE);
+        SendMessageW(list_, WM_SETREDRAW, TRUE, 0); InvalidateRect(list_, nullptr, FALSE);
         std::wstring text;
         if (index_.connection_count() == 0) text = L"浏览器尚未连接";
         else if (rows_.empty() && !query.empty()) text = L"没有匹配结果";

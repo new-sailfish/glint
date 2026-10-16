@@ -4,6 +4,6 @@
   "path": "C:\\Path\\To\\Glint.exe",
   "type": "stdio",
   "allowed_origins": [
-    "chrome-extension://__CHROME_EXTENSION_ID__/*"
+    "chrome-extension://__CHROME_EXTENSION_ID__/"
   ]
 }

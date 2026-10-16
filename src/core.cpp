@@ -420,9 +420,11 @@ bool TabIndex::apply(ConnectionId connection_id, const Json& message) {
     if (!type_json || !type_json->is_string()) return false;
     const auto type = type_json->as_string();
     std::lock_guard lock(mutex_);
+    try {
+        if (integer_field(message, "version") != kProtocolVersion) return false;
+    } catch (const ProtocolError&) { return false; }
     if (type == "hello") {
         try {
-            if (integer_field(message, "version") != kProtocolVersion) return false;
             State state;
             state.info.connection_id = connection_id;
             state.info.session_id = string_field(message, "sessionId");
