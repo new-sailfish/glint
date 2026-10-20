@@ -343,7 +343,7 @@ private:
 
     void show_setup() {
         if (!setup_) return;
-        setup_->update_connection(index_.connection_count(), index_.tab_count(), hotkey_name(kHotkeys[hotkey_index_]));
+        setup_->update_connection(index_.connections(), hotkey_name(kHotkeys[hotkey_index_]));
         setup_->show();
     }
 
@@ -369,7 +369,7 @@ private:
             return;
         }
         hotkey_index_ = next; save_hotkey_index(next);
-        if (setup_) setup_->update_connection(index_.connection_count(), index_.tab_count(), hotkey_name(kHotkeys[hotkey_index_]));
+        if (setup_) setup_->update_connection(index_.connections(), hotkey_name(kHotkeys[hotkey_index_]));
     }
 
     void refresh_results() {
@@ -442,7 +442,7 @@ private:
             } catch (const ProtocolError&) {}
         }
         if (IsWindowVisible(window_)) refresh_results();
-        if (setup_) setup_->update_connection(index_.connection_count(), index_.tab_count(), hotkey_name(kHotkeys[hotkey_index_]));
+        if (setup_) setup_->update_connection(index_.connections(), hotkey_name(kHotkeys[hotkey_index_]));
     }
 
     void shutdown() {

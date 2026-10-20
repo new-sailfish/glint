@@ -31,7 +31,9 @@ jobs:
           Copy-Item .\build\release\Release\Glint.exe dist\Glint.exe
           Copy-Item .\extension dist\extension -Recurse
           Copy-Item .\README.md dist\README.md
-          Compress-Archive -Path dist\Glint.exe,dist\extension,dist\README.md -DestinationPath Glint-win-x64.zip -Force
+          Copy-Item .\README.zh-CN.md dist\README.zh-CN.md
+          Copy-Item .\docs dist\docs -Recurse
+          Compress-Archive -Path dist\Glint.exe,dist\extension,dist\README.md,dist\README.zh-CN.md,dist\docs -DestinationPath Glint-win-x64.zip -Force
       - uses: actions/upload-artifact@v4
         with:
           name: Glint-win-x64

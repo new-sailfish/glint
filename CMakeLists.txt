@@ -25,6 +25,7 @@ if(WIN32)
     src/registration.cpp
     src/setup_window.cpp
     src/extension_bundle.cpp
+    src/browser_launch.cpp
     src/win_resources.rc
   )
   target_link_libraries(glint PRIVATE glint_core user32 shell32 comctl32 advapi32 ole32)
@@ -47,6 +48,16 @@ if(GLINT_BUILD_TESTS)
     set_property(TARGET glint_core_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
   endif()
   add_test(NAME glint_core COMMAND glint_core_tests)
+
+  add_executable(glint_setup_progress_tests tests/test_setup_progress.cpp)
+  target_include_directories(glint_setup_progress_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(glint_setup_progress_tests PRIVATE glint_core)
+  target_compile_features(glint_setup_progress_tests PRIVATE cxx_std_20)
+  if(MSVC)
+    target_compile_options(glint_setup_progress_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+    set_property(TARGET glint_setup_progress_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  endif()
+  add_test(NAME glint_setup_progress COMMAND glint_setup_progress_tests)
 
   if(WIN32)
     add_executable(glint_registration_tests tests/test_registration.cpp src/registration.cpp src/win_common.cpp)
@@ -72,6 +83,35 @@ if(GLINT_BUILD_TESTS)
       set_property(TARGET glint_extension_bundle_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()
     add_test(NAME glint_extension_bundle COMMAND glint_extension_bundle_tests)
+
+    add_executable(glint_browser_launch_tests tests/test_browser_launch.cpp src/browser_launch.cpp)
+    target_include_directories(glint_browser_launch_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(glint_browser_launch_tests PRIVATE advapi32 shell32)
+    target_compile_features(glint_browser_launch_tests PRIVATE cxx_std_20)
+    if(MSVC)
+      target_compile_options(glint_browser_launch_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+      set_property(TARGET glint_browser_launch_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_browser_launch COMMAND glint_browser_launch_tests)
+
+    add_executable(glint_setup_window_tests
+      tests/test_setup_window.cpp
+      src/setup_window.cpp
+      src/browser_launch.cpp
+      src/registration.cpp
+      src/win_common.cpp
+      src/extension_bundle.cpp
+      src/extension_bundle_resources.rc
+    )
+    target_include_directories(glint_setup_window_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(glint_setup_window_tests PRIVATE glint_core user32 gdi32 shell32 comctl32 advapi32 ole32)
+    target_compile_features(glint_setup_window_tests PRIVATE cxx_std_20)
+    target_compile_definitions(glint_setup_window_tests PRIVATE UNICODE _UNICODE)
+    if(MSVC)
+      target_compile_options(glint_setup_window_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+      set_property(TARGET glint_setup_window_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_setup_window COMMAND glint_setup_window_tests)
   endif()
 endif()
 

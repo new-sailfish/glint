@@ -1,5 +1,6 @@
 #include "win_app.hpp"
 #include "registration.hpp"
+#include "extension_identity.hpp"
 
 #include "glint/core.hpp"
 #include "win_common.hpp"
@@ -186,6 +187,11 @@ bool remove_manifest(const std::filesystem::path& path) {
 } // namespace
 
 namespace setup {
+
+bool register_bundled_host(bool edge, std::wstring& error) {
+    const std::wstring id = utf8_to_wide(kBundledExtensionId);
+    return edge ? register_hosts(L"", id, error) == 0 : register_hosts(id, L"", error) == 0;
+}
 
 bool valid_extension_id(std::wstring_view id) { return valid_extension_id_impl(id); }
 

@@ -12,7 +12,7 @@
   elements['copy-id'].addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(chrome.runtime.id);
-      elements['copy-status'].textContent = '扩展 ID 已复制。回到 Glint，打开“连接浏览器”并粘贴。';
+      elements['copy-status'].textContent = '扩展 ID 已复制。回到 Glint，在“其他版本：手动填写扩展 ID”中填写到对应浏览器。';
     } catch (_) {
       elements['extension-id'].focus();
       elements['extension-id'].select();
@@ -25,11 +25,11 @@
     elements['status-dot'].classList.toggle('good', portOpen);
     if (portOpen) {
       elements['connection-status'].textContent = '桥接通道已打开';
-      elements['connection-detail'].textContent = '扩展端口已建立。请回到 Glint，确认标签页已出现在搜索列表中；这里不能单独确认桌面端同步完成。';
+      elements['connection-detail'].textContent = '请回到 Glint 确认连接结果。Glint 收到当前浏览器的标签页后会显示连接成功；此页面只能确认桥接通道已打开。';
     } else {
       elements['connection-status'].textContent = '尚未建立桥接通道';
       const error = response && response.error;
-      elements['connection-detail'].textContent = '请确认 Glint 正在运行，并已使用当前扩展 ID 注册。' + (error ? ` 浏览器返回：${error}` : '');
+      elements['connection-detail'].textContent = '请确认 Glint 正在运行，并在“连接浏览器”向导中选择了当前浏览器，然后点击“重试连接”。升级旧版时，请查看下方“高级排查”。' + (error ? ` 浏览器返回：${error}` : '');
     }
   }
 

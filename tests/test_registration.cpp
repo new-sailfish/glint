@@ -1,4 +1,5 @@
 #include "registration.hpp"
+#include "extension_identity.hpp"
 #include "win_app.hpp"
 
 #include "glint/core.hpp"
@@ -169,6 +170,47 @@ void independent_browser_registration() {
     }
 }
 
+void bundled_registration_only_changes_selected_browser() {
+    const auto bundled_id = glint::utf8_to_wide(glint::setup::kBundledExtensionId);
+    require(glint::setup::valid_extension_id(bundled_id), "bundled extension ID is valid");
+    for (const bool edge : {false, true}) {
+        Sandbox sandbox;
+        std::wstring error;
+        require(glint::setup::register_hosts(kChromeId, kEdgeId, error) == 0, "prepare custom registrations");
+        const wchar_t* selected_key = edge ? kEdgeKey : kChromeKey;
+        const wchar_t* other_key = edge ? kChromeKey : kEdgeKey;
+        const auto other_path = registered_manifest(other_key);
+        const auto other_manifest = load_manifest(other_key).dump();
+        const auto other_timestamp = std::filesystem::last_write_time(other_path);
+
+        error = L"old error";
+        require(glint::setup::register_bundled_host(edge, error) && error.empty(), "register bundled host for selected browser");
+        const auto state = glint::setup::read_registration();
+        require((edge ? state.edge_id : state.chrome_id) == bundled_id, "selected browser uses fixed bundled ID");
+        require((edge ? state.edge_current : state.chrome_current), "bundled host targets current executable");
+        require((edge ? state.chrome_id : state.edge_id) == (edge ? kChromeId : kEdgeId), "other browser retains custom ID");
+        require(registered_manifest(other_key) == other_path && load_manifest(other_key).dump() == other_manifest,
+                "other browser retains registry path and manifest contents");
+        require(std::filesystem::last_write_time(other_path) == other_timestamp, "other browser manifest is not rewritten");
+        const auto manifest = load_manifest(selected_key);
+        const auto& origins = manifest.at("allowed_origins").as_array();
+        require(origins.size() == 1 && origins[0].as_string() ==
+                std::string("chrome-extension://") + glint::setup::kBundledExtensionId + "/",
+                "bundled manifest allows only fixed extension origin");
+        require(registered_manifest(selected_key).parent_path() == sandbox.directory() / L"Glint",
+                "bundled manifest uses isolated LOCALAPPDATA");
+    }
+}
+
+void bundled_registration_reports_write_failure() {
+    Sandbox sandbox;
+    { std::ofstream blocked(sandbox.directory() / L"Glint"); blocked << "blocks registration directory"; }
+    std::wstring error;
+    require(!glint::setup::register_bundled_host(false, error) && !error.empty(), "bundled registration reports failure");
+    const auto state = glint::setup::read_registration();
+    require(state.chrome_id.empty() && state.edge_id.empty(), "failed bundled registration leaves registry empty");
+}
+
 void stale_and_invalid_manifests() {
     Sandbox sandbox;
     std::wstring error;
@@ -239,6 +281,8 @@ int main() {
     try {
         validation_and_no_partial_update();
         independent_browser_registration();
+        bundled_registration_only_changes_selected_browser();
+        bundled_registration_reports_write_failure();
         stale_and_invalid_manifests();
         unregister_is_idempotent();
         onboarding_state();

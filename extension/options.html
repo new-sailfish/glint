@@ -46,23 +46,17 @@
 <body>
   <main>
     <div class="brand">Glint · <span id="browser-name">浏览器</span></div>
-    <h1>让这里的标签页出现在 Glint 中</h1>
-    <p>扩展已安装到当前浏览器配置文件。接下来，把它和桌面端连接起来。</p>
+    <h1>回到 Glint，完成连接</h1>
+    <p>扩展已加载到当前浏览器配置文件。使用内置扩展时，无需复制或填写扩展 ID。</p>
     <ol>
       <li><div>
-        <h2>复制当前扩展 ID</h2>
-        <label class="hint" for="extension-id">此 ID 用于授权扩展连接本机 Glint</label>
-        <div class="row"><input id="extension-id" readonly spellcheck="false" aria-describedby="copy-status"><button id="copy-id" type="button">复制 ID</button></div>
-        <p id="copy-status" class="hint feedback" role="status" aria-live="polite"></p>
+        <h2>在 Glint 中检查连接</h2>
+        <p>回到桌面端的“连接浏览器”窗口，点击<strong>我已加载扩展，检查连接</strong>。等待 Glint 收到当前浏览器的标签页。</p>
+        <p class="hint">找不到窗口时，从 Glint 系统托盘菜单打开“连接浏览器”，选择当前浏览器，按向导继续。</p>
       </div></li>
       <li><div>
-        <h2>在桌面端注册</h2>
-        <p>运行 <strong>Glint.exe</strong>，打开“连接浏览器”，把 ID 粘贴到对应的 Chrome 或 Edge 输入框，再点击“保存并注册”。也可以从系统托盘菜单打开这个入口。</p>
-        <p class="hint">无需管理员权限。更换 Glint.exe 的存放位置或扩展 ID 后，需要重新注册。</p>
-      </div></li>
-      <li><div>
-        <h2>试一次标签页搜索</h2>
-        <p>点击下面的“重试连接”，然后按 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd> 呼出 Glint。空查询应显示这个配置文件的标签页；输入标题或网址，按回车切换过去。</p>
+        <h2>连接成功后开始搜索</h2>
+        <p>在 Glint 中点击<strong>开始搜索</strong>，或按 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd> 呼出搜索框。输入标签页标题或网址，按回车切换过去。</p>
         <p class="hint">如果你修改过热键，请使用桌面端中设置的组合键。</p>
       </div></li>
     </ol>
@@ -72,6 +66,16 @@
       <p id="connection-detail" class="hint">正在唤醒扩展后台服务。</p>
       <button id="retry" type="button">重试连接</button>
     </section>
+
+    <details>
+      <summary>高级排查：旧版或其他版本扩展</summary>
+      <p>从旧版升级后，请先在浏览器的扩展管理页重新加载 Glint。新版内置扩展 ID 为 <code>pecljnjkgandbbelbajkppllibpehhpe</code>；如果下面仍显示旧 ID，请移除旧扩展，再加载 Glint 向导提供的新目录。</p>
+      <p>使用商店版或其他 ID 的扩展时，复制下面的 ID，在 Glint 选择浏览器页面点击<strong>其他版本：手动填写扩展 ID</strong>，填写到对应浏览器并注册。</p>
+      <label class="hint" for="extension-id">当前扩展 ID</label>
+      <div class="row"><input id="extension-id" readonly spellcheck="false" aria-describedby="copy-status"><button id="copy-id" type="button">复制 ID</button></div>
+      <p id="copy-status" class="hint feedback" role="status" aria-live="polite"></p>
+      <p class="hint">更换 Glint.exe 的位置后，请重新运行“连接浏览器”向导，更新连接信息。无需管理员权限。</p>
+    </details>
 
     <details>
       <summary>给这个配置文件起个名字（可选）</summary>
