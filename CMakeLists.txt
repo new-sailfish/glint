@@ -229,6 +229,10 @@ if(GLINT_BUILD_TESTS)
     if(WIN32)
       set_tests_properties(glint_pipe_server PROPERTIES TIMEOUT 20)
       set_tests_properties(glint_native_host PROPERTIES TIMEOUT 45)
+      # Desktop geometry, keyboard focus and global hotkeys are validated on
+      # the developer desktop; CI excludes this label in its headless checks.
+      set_tests_properties(glint_search_navigation glint_hotkey glint_hotkey_window
+        glint_setup_window PROPERTIES LABELS desktop)
     endif()
   endif()
 endif()

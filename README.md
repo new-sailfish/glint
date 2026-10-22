@@ -333,10 +333,12 @@ keyboard focus and 100/150/200% DPI layout. Real isolated Windows pipe tests
 cover duplex forwarding, invalid/fragmented frames, EOF, disconnect, shutdown
 races, independent clients, bounded outbound queues and stalled-peer failures.
 GitHub Actions builds Release x64 on `windows-2022` with VS 2022, matching the
-CMake preset instead of following changes to `windows-latest`. Pull requests run smoke
-and change-related tests; `master`/`main`, tags and manual runs execute the same
-complete `check-release.ps1` gate used locally and upload the standalone EXE,
-full ZIP, and hash manifest. Documentation-only changes skip CI, and newer
+CMake preset instead of following changes to `windows-latest`. Pull requests and
+official builds run script checks, non-desktop CTest targets (`-LE desktop`), and
+extension tests. Official builds also check imports, package and upload the EXE,
+ZIP and hash manifest. Window geometry, DPI, focus, global-hotkey and desktop
+lifecycle checks run in the complete local `check-release.ps1` gate; CI does not
+depend on a virtual desktop's display settings. Documentation-only changes skip CI, and newer
 runs cancel obsolete runs of the same ref.
 Tag releases attach both files directly, so users can choose the EXE without
 downloading or arranging a package folder.

@@ -8,7 +8,7 @@
 - For development/release script changes, run `pwsh -NoProfile -File scripts/tests/<name>.test.ps1` for the relevant script. CI runs these small regression harnesses before building. They use temporary fixtures and need no extra test framework.
 - Run relevant checks once after code is complete. Documentation/comment-only changes do not need another application test run; don't repeat passing checks after edits that cannot affect their result.
 - Before handing over a Release, run `scripts/check-release.ps1`: configure/build, full CTest, extension tests, lifecycle smoke, imports, package/hash verification. Focused `-Skip...` runs are not release validation; skipping a validation check also requires `-SkipPackage`.
-- CI runs changed tests for pull requests and complete Release validation for `master`/`main`, tags, and manual runs. Documentation-only changes skip CI. Keep local and CI commands synchronized.
+- CI builds and runs non-desktop CTest targets (`-LE desktop`), extension tests and script checks. Official builds also verify imports and package artifacts. Window geometry, DPI, focus, global-hotkey and desktop lifecycle checks stay in the full local `check-release.ps1` gate. Keep desktop-dependent tests labeled `desktop`. Documentation-only changes skip CI.
 - Keep CI on `windows-2022` with VS 2022 while the CMake preset requires the VS 17 generator. Product versions come from `VERSION` and the build-time generator; never edit generated headers or binaries to change a version. Local counters under `.local/build-version/` and official CI `build-version/*` allocation tags are independent; preserve both. Only `v*` tags publish Releases.
 
 ## Validated release builds

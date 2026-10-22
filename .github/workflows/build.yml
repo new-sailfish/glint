@@ -65,11 +65,10 @@ jobs:
         run: cmake --preset release
       - name: Build Release x64
         run: cmake --build --preset release --parallel
-      - name: Test changed targets (pull request)
-        shell: pwsh
-        env:
-          TEST_BASE: ${{ github.event.pull_request.base.sha }}
-        run: .\scripts\test-changed.ps1
+      - name: Test core and native protocol targets
+        run: ctest --preset release --output-on-failure --no-tests=error -LE desktop
+      - name: Test browser extension
+        run: npm --prefix extension test
   windows-release:
     if: github.event_name != 'pull_request'
     needs: script-tests
@@ -98,11 +97,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: .\scripts\reserve-ci-version.ps1
-      - name: Validate and package complete Release
-        shell: pwsh
+      - name: Configure Release x64
+        run: cmake --preset release
+      - name: Build Release x64
         env:
           GLINT_CI_VERSION: ${{ steps.reserve.outputs.version }}
-        run: .\scripts\check-release.ps1
+        run: cmake --build --preset release --parallel
+      - name: Test core and native protocol targets
+        run: ctest --preset release --output-on-failure --no-tests=error -LE desktop
+      - name: Test browser extension
+        run: npm --prefix extension test
+      - name: Check native imports
+        shell: pwsh
+        run: .\scripts\check-imports.ps1 -Binary .\build\release\Release\Glint.exe
+      - name: Package and verify Release
+        shell: pwsh
+        run: .\scripts\package-release.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: Glint-exe-windows-x64

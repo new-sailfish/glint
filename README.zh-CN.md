@@ -190,9 +190,10 @@ CI 使用独立计数：脚本检查通过后，通过创建 `build-version/0.1.
 .\scripts\test-changed.ps1 src/hotkey.cpp extension/options.js
 ```
 
-CI 固定使用 `windows-2022` 和 VS 2022，与 CMake 预设匹配。PR 只跑 smoke 和相关测试；
-`master`/`main`、`v*` 标签和手动运行执行完整
-Release 门禁。仅文档改动跳过 CI。发布清单 `dist/release-manifest.json`
+CI 固定使用 `windows-2022` 和 VS 2022，与 CMake 预设匹配。PR 和正式构建运行
+脚本检查、不依赖桌面的 CTest（`-LE desktop`）及扩展测试；正式构建还校验依赖并打包上传。
+窗口尺寸、DPI、焦点、全局热键及桌面生命周期检查保留在本地完整的 `check-release.ps1`
+发布门禁中，不依赖 CI 虚拟桌面的显示设置。仅文档改动跳过 CI。发布清单 `dist/release-manifest.json`
 记录版本、提交、未提交改动状态及各文件 SHA-256，发布脚本清除受管理目录中的旧文件，
 保留已安装扩展使用的 `dist/browser-extension` 路径。
 

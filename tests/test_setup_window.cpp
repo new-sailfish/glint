@@ -204,9 +204,33 @@ RECT bounds(HWND parent, HWND child) {
     return rect;
 }
 
+class NativeFrameLimit {
+public:
+    explicit NativeFrameLimit(HWND window) : window_(window) {
+        require(SetWindowSubclass(window_, window_proc, 1, 0), "install the hosted-size fixture constraint");
+    }
+    ~NativeFrameLimit() { RemoveWindowSubclass(window_, window_proc, 1); }
+    NativeFrameLimit(const NativeFrameLimit&) = delete;
+    NativeFrameLimit& operator=(const NativeFrameLimit&) = delete;
+private:
+    HWND window_;
+    static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam,
+                                       UINT_PTR, DWORD_PTR) {
+        const auto result = DefSubclassProc(window, message, wparam, lparam);
+        if (message == WM_GETMINMAXINFO) {
+            // DefWindowProc enforces this limit during WM_WINDOWPOSCHANGING,
+            // just as a hosted desktop limits an ordinary top-level window.
+            reinterpret_cast<MINMAXINFO*>(lparam)->ptMaxTrackSize = {1024, 720};
+        }
+        return result;
+    }
+};
+
 void resize_client(HWND window, int width, int height) {
     // A native window can extend past the test monitor. Size its client canvas
     // explicitly rather than changing the user's monitor or DPI settings.
+    // Skip WM_WINDOWPOSCHANGING only for this fixture resize: DefWindowProc
+    // otherwise reapplies the screen's maximum tracking size to the canvas.
     // A scrollbar appearing/disappearing during WM_SIZE can change the frame
     // width, so measure again before correcting the final client dimensions.
     for (int attempt = 0; attempt < 3; ++attempt) {
@@ -216,11 +240,16 @@ void resize_client(HWND window, int width, int height) {
         require(SetWindowPos(window, nullptr, 0, 0,
             width + frame.right - frame.left - client.right,
             height + frame.bottom - frame.top - client.bottom,
-            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE), "size the layout fixture client canvas");
+            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOSENDCHANGING), "size the layout fixture client canvas");
     }
     RECT client{};
-    require(GetClientRect(window, &client) && client.right == width && client.bottom == height,
-            "layout fixture must have its requested client dimensions");
+    require(GetClientRect(window, &client), "read final layout fixture dimensions");
+    if (client.right != width || client.bottom != height) {
+        std::cerr << "layout fixture expected=" << width << ',' << height
+            << " actual=" << client.right << ',' << client.bottom
+            << " native DPI=" << GetDpiForWindow(window) << '\n';
+        throw std::runtime_error("layout fixture must have its requested client dimensions");
+    }
 }
 
 void check_layout(HWND window, UINT dpi) {
@@ -353,6 +382,21 @@ void short_monitor_focus_and_scrolling() {
     setup.show();
     check_guide_page(window, 2);
     check_focused_control_in_viewport(window, "showing an existing guide must reveal its already focused control");
+}
+
+void hosted_native_frame_limit_layout() {
+    Sandbox sandbox;
+    glint::SetupWindow setup(nullptr, [] {});
+    setup.show();
+    const auto window = test_window();
+    NativeFrameLimit limit(window);
+    require(SetWindowPos(window, nullptr, 0, 0, 1400, 1300,
+        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE), "request a frame beyond hosted-screen limits");
+    RECT frame{};
+    require(GetWindowRect(window, &frame), "read the constrained native frame");
+    require(frame.right - frame.left <= 1024 && frame.bottom - frame.top <= 720,
+            "the native fixture must reproduce a hosted-size cap before testing the virtual canvas");
+    check_all_dpis(window);
 }
 
 void automatic_edge_flow() {
@@ -642,6 +686,7 @@ int main() {
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         INITCOMMONCONTROLSEX controls{sizeof(controls), ICC_LISTVIEW_CLASSES};
         require(InitCommonControlsEx(&controls) != FALSE, "initialize native setup controls");
+        hosted_native_frame_limit_layout();
         automatic_edge_flow();
         manual_validation_and_completion();
         confirmation_page_id_repair();
