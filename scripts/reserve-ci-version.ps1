@@ -72,7 +72,10 @@ for ($attempt = 1; $attempt -le 20; $attempt++) {
   $maximumPatch = $minimumPatch
   # List tags rather than matching-refs: this endpoint documents pagination.
   for ($page = 1; ; $page++) {
-    $tags = @(Get-GitHubResource "${apiRoot}/tags?per_page=100&page=$page")
+    # REST emits a JSON array as one pipeline object. Capture it directly:
+    # @(Get-GitHubResource ...) would add an outer array around each page.
+    $tags = Get-GitHubResource "${apiRoot}/tags?per_page=100&page=$page"
+    if ($tags -isnot [array]) { throw 'GitHub returned an invalid tag listing response.' }
     foreach ($tag in $tags) {
       if ($null -eq $tag -or $tag.name -isnot [string]) { throw 'GitHub returned an invalid tag listing response.' }
       if (-not $tag.name.StartsWith('build-version/', [StringComparison]::Ordinal)) { continue }

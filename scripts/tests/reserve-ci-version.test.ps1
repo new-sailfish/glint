@@ -69,7 +69,10 @@ function Invoke-RestMethod {
     $visible = @($global:GlintCiVersionTestApi.Tags | Where-Object {
         -not $global:GlintCiVersionTestApi.StaleListing -or $_.commit.sha -eq ('a' * 40)
       })
-    return @($visible | Select-Object -Skip (($page - 1) * 100) -First 100)
+    # Invoke-RestMethod writes a JSON array as one pipeline object, even when
+    # empty. Preserve that shape so the fixture exercises actual REST behavior.
+    Write-Output -NoEnumerate @($visible | Select-Object -Skip (($page - 1) * 100) -First 100)
+    return
   }
   if ($Method -eq 'Post' -and $Uri.EndsWith('/git/refs')) {
     $request = $Body | ConvertFrom-Json
@@ -164,6 +167,19 @@ try {
     $result = Invoke-Reservation $fixture
     Assert-True ($result.Saved.Trim() -eq 'version=0.1.200') 'Paginated maximum was missed.'
     Assert-True ([bool]($fixture.Requests | Where-Object Uri -like '*page=2')) 'Second page was not read.'
+  }
+  foreach ($tagCount in @(0, 1, 99, 100, 101, 200, 201)) {
+    Test-Case "REST array with $tagCount tags normalizes and paginates correctly" {
+      $tags = @(for ($patch = 1; $patch -le $tagCount; $patch++) { "build-version/0.1.$patch" })
+      $fixture = New-Fixture '0.1.0' $tags
+      $result = Invoke-Reservation $fixture
+      Assert-True ($null -eq $result.Failure) "REST-shaped reservation failed: $($result.Failure)"
+      Assert-True ($result.Saved.Trim() -eq "version=0.1.$($tagCount + 1)") 'REST array maximum was not applied.'
+      $pages = @($fixture.Requests | Where-Object Uri -match '/tags\?')
+      $expectedPages = [Math]::Floor($tagCount / 100) + 1
+      Assert-True ($pages.Count -eq $expectedPages) "Expected $expectedPages list pages; got $($pages.Count)."
+      Assert-True (@($fixture.Requests | Where-Object Method -eq 'Post').Count -eq 1) 'Expected one reservation.'
+    }
   }
   Test-Case 'a genuine collision retries above the consumed patch even with stale listing' {
     $fixture = New-Fixture
