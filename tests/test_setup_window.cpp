@@ -204,6 +204,25 @@ RECT bounds(HWND parent, HWND child) {
     return rect;
 }
 
+void resize_client(HWND window, int width, int height) {
+    // A native window can extend past the test monitor. Size its client canvas
+    // explicitly rather than changing the user's monitor or DPI settings.
+    // A scrollbar appearing/disappearing during WM_SIZE can change the frame
+    // width, so measure again before correcting the final client dimensions.
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        RECT client{}, frame{};
+        require(GetClientRect(window, &client) && GetWindowRect(window, &frame), "read layout fixture dimensions");
+        if (client.right == width && client.bottom == height) return;
+        require(SetWindowPos(window, nullptr, 0, 0,
+            width + frame.right - frame.left - client.right,
+            height + frame.bottom - frame.top - client.bottom,
+            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE), "size the layout fixture client canvas");
+    }
+    RECT client{};
+    require(GetClientRect(window, &client) && client.right == width && client.bottom == height,
+            "layout fixture must have its requested client dimensions");
+}
+
 void check_layout(HWND window, UINT dpi) {
     RECT frame{0, 0, MulDiv(680, dpi, 96), MulDiv(586, dpi, 96)};
     // Sending WM_DPICHANGED exercises the content scaling; the window manager
@@ -212,7 +231,18 @@ void check_layout(HWND window, UINT dpi) {
         FALSE, static_cast<DWORD>(GetWindowLongPtrW(window, GWL_EXSTYLE)), GetDpiForWindow(window)) != FALSE,
         "calculate DPI test window bounds");
     frame.right -= frame.left; frame.bottom -= frame.top; frame.left = 0; frame.top = 0;
+    frame.right = (std::min)(frame.right, 1024L);
+    frame.bottom = (std::min)(frame.bottom, 720L);
+    // Stay on the current monitor: moving to desktop (0,0) could generate a
+    // real DPI transition that replaces the synthetic DPI under test.
+    MONITORINFO monitor{sizeof(monitor)};
+    require(GetMonitorInfoW(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &monitor), "read the fixture monitor");
+    OffsetRect(&frame, monitor.rcWork.left, monitor.rcWork.top);
     SendMessageW(window, WM_DPICHANGED, MAKELONG(dpi, dpi), reinterpret_cast<LPARAM>(&frame));
+    // Production correctly clips the suggested frame to the monitor and uses
+    // scrolling. Check the complete scaled layout on its full logical canvas;
+    // constrained-viewport reachability is verified separately below.
+    resize_client(window, MulDiv(680, dpi, 96), MulDiv(586, dpi, 96));
     RECT client{}; GetClientRect(window, &client);
     std::vector<RECT> occupied;
     for (HWND child = GetWindow(window, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT)) {
@@ -248,17 +278,22 @@ void check_all_dpis(HWND window) {
     check_layout(window, 96);
 }
 
-void resize_to_short_viewport(HWND window) {
-    const UINT dpi = GetDpiForWindow(window);
-    RECT frame{0, 0, MulDiv(680, dpi, 96), MulDiv(380, dpi, 96)}, current{};
+void resize_to_short_viewport(HWND window, UINT dpi = 0) {
+    if (!dpi) dpi = GetDpiForWindow(window);
+    const int width = MulDiv(680, dpi, 96);
+    const int height = (std::min)(MulDiv(380, dpi, 96), 689);
+    RECT frame{0, 0, width, height}, current{};
     require(GetWindowRect(window, &current), "read short-monitor window position");
     require(AdjustWindowRectExForDpi(&frame, static_cast<DWORD>(GetWindowLongPtrW(window, GWL_STYLE)),
-        FALSE, static_cast<DWORD>(GetWindowLongPtrW(window, GWL_EXSTYLE)), dpi),
+        FALSE, static_cast<DWORD>(GetWindowLongPtrW(window, GWL_EXSTYLE)), GetDpiForWindow(window)),
         "calculate short-monitor window bounds");
     frame.right = current.left + frame.right - frame.left;
     frame.bottom = current.top + frame.bottom - frame.top;
     frame.left = current.left; frame.top = current.top;
     SendMessageW(window, WM_DPICHANGED, MAKELONG(dpi, dpi), reinterpret_cast<LPARAM>(&frame));
+    // Keep this test about vertical scrolling: use the full logical width and
+    // a deterministic clipped height even on a smaller hosted monitor.
+    resize_client(window, width, height);
 }
 
 void check_focused_control_in_viewport(HWND window, const char* message) {
@@ -279,6 +314,18 @@ void short_monitor_focus_and_scrolling() {
     glint::SetupWindow setup(nullptr, [] {});
     setup.show();
     const auto window = test_window();
+    for (const UINT dpi : {96u, 144u, 192u}) {
+        resize_to_short_viewport(window, dpi);
+        SCROLLINFO scroll{sizeof(scroll), SIF_RANGE | SIF_PAGE};
+        require(GetScrollInfo(window, SB_VERT, &scroll) && scroll.nPage < static_cast<UINT>(scroll.nMax + 1),
+                "short-viewport fixture must require vertical scrolling");
+        for (HWND child = GetWindow(window, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT)) {
+            if (!IsWindowVisible(child) || !IsWindowEnabled(child) || !(GetWindowLongPtrW(child, GWL_STYLE) & WS_TABSTOP)) continue;
+            SetFocus(child);
+            require(GetFocus() == child, "a visible tab stop must accept keyboard focus");
+            check_focused_control_in_viewport(window, "every setup tab stop must scroll into the clipped viewport at each DPI");
+        }
+    }
     click(window, ChooseChrome);
     click(window, Primary);
     resize_to_short_viewport(window);
