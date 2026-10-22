@@ -4,6 +4,8 @@
 
 中文安装步骤见 [使用说明](README.zh-CN.md)。
 
+[Download Glint.exe](https://github.com/new-sailfish/glint/releases/latest/download/Glint.exe) · [All releases](https://github.com/new-sailfish/glint/releases)
+
 Glint is a small Windows 10/11 x64 resident search window for open Chrome and
 Edge tabs. The first release uses one C++20 executable in two modes:
 
@@ -82,7 +84,9 @@ GitHub Actions reserves the next `build-version/0.1.N` tag atomically; reruns
 reserve another number. These tags record allocations and are not Releases.
 Do not delete them if you want CI numbering to remain continuous. Pull requests
 use an isolated local preview counter and have no tag-writing permission.
-Only `v*` tags trigger the existing release-publishing workflow.
+Successful `master`/`main` and manual builds automatically create a
+`v<build-version>` GitHub Release with the EXE, ZIP and version/hash manifest.
+No manual tag push is needed; failed builds and pull requests do not publish.
 
 The product version appears in the window title, tray tooltip and EXE properties.
 Windows stores the numeric file version as `0.1.N.0`; the release manifest records
@@ -121,7 +125,7 @@ desktop output; native-host protocol output is reserved for frames.
 
 ## Install and connect a browser
 
-Download **Glint.exe** from the release assets and keep it at a stable location.
+Download **Glint.exe** from the [latest release](https://github.com/new-sailfish/glint/releases/latest) and keep it at a stable location.
 That single executable is sufficient to distribute and run Glint: it embeds
 the five browser-extension runtime files and four icon assets; the connection guide extracts them
 to `%LOCALAPPDATA%\Glint\browser-extension`. You do not need to download an
@@ -335,12 +339,12 @@ races, independent clients, bounded outbound queues and stalled-peer failures.
 GitHub Actions builds Release x64 on `windows-2022` with VS 2022, matching the
 CMake preset instead of following changes to `windows-latest`. Pull requests and
 official builds run script checks, non-desktop CTest targets (`-LE desktop`), and
-extension tests. Official builds also check imports, package and upload the EXE,
-ZIP and hash manifest. Window geometry, DPI, focus, global-hotkey and desktop
+extension tests. Official builds also check imports, package and publish the EXE,
+ZIP and hash manifest directly to GitHub Releases. Window geometry, DPI, focus, global-hotkey and desktop
 lifecycle checks run in the complete local `check-release.ps1` gate; CI does not
 depend on a virtual desktop's display settings. Documentation-only changes skip CI, and newer
 runs cancel obsolete runs of the same ref.
-Tag releases attach both files directly, so users can choose the EXE without
+Every successful official build attaches both files directly, so users can choose the EXE without
 downloading or arranging a package folder.
 
 Manual validation is still required with real Chrome/Edge profiles: extension

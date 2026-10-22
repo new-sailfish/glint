@@ -4,6 +4,8 @@
 
 # Glint 使用说明
 
+[下载 Glint.exe](https://github.com/new-sailfish/glint/releases/latest/download/Glint.exe) · [所有发布版本](https://github.com/new-sailfish/glint/releases)
+
 Glint 在 Windows 10/11 上搜索已连接的 Chrome、Edge 标签页。运行
 `Glint.exe`，默认按 `Ctrl+Shift+Space` 搜索标题和网址；上下键选择，回车
 切换，Esc 隐藏。关闭窗口后程序仍在托盘运行。
@@ -29,7 +31,7 @@ Ctrl、Alt、Shift、Win；F12 为系统保留键。也可点击 **恢复默认*
 
 ## 第一次连接
 
-发布页直接下载 **Glint.exe** 即可，放在准备长期保留的位置。扩展运行所需的
+从[最新发布页](https://github.com/new-sailfish/glint/releases/latest)直接下载 **Glint.exe** 即可，放在准备长期保留的位置。扩展运行所需的
 5 个运行文件和 4 个图标资源已内嵌在 EXE 中，连接向导会自动释放到
 `%LOCALAPPDATA%\Glint\browser-extension`，无需另外下载或整理扩展文件夹。
 **Glint-win-x64.zip** 是可选完整包，额外包含扩展文件和说明文档。
@@ -175,7 +177,8 @@ Chrome 中 Glint 卡片已经消失时，直接加载新目录即可；Edge 如�
 CI 使用独立计数：脚本检查通过后，通过创建 `build-version/0.1.N` 标签原子地领取
 下一个补丁号，重新运行也会领取新号。这些标签只是构建编号记录，不是 Releases，
 不要删除它们以免影响计数。PR 使用隔离的本地预览计数，不能写入构建标签；
-只有 `v*` 标签会触发现有的 Release 发布流程。
+`master`/`main` 或手动触发的正式构建成功后，会自动创建 `v<构建版本>` Release，
+附上 EXE、ZIP 和版本/哈希清单，无需手动推送标签；失败构建和 PR 不发布。
 
 窗口标题、托盘提示和 EXE 属性都显示产品版本。Windows 数字文件版本为 `0.1.N.0`，
 发布清单直接读取打包 EXE 的版本，记录产品版本和文件版本。
@@ -191,7 +194,7 @@ CI 使用独立计数：脚本检查通过后，通过创建 `build-version/0.1.
 ```
 
 CI 固定使用 `windows-2022` 和 VS 2022，与 CMake 预设匹配。PR 和正式构建运行
-脚本检查、不依赖桌面的 CTest（`-LE desktop`）及扩展测试；正式构建还校验依赖并打包上传。
+脚本检查、不依赖桌面的 CTest（`-LE desktop`）及扩展测试；正式构建还校验依赖、打包并直接发布到 GitHub Releases。
 窗口尺寸、DPI、焦点、全局热键及桌面生命周期检查保留在本地完整的 `check-release.ps1`
 发布门禁中，不依赖 CI 虚拟桌面的显示设置。仅文档改动跳过 CI。发布清单 `dist/release-manifest.json`
 记录版本、提交、未提交改动状态及各文件 SHA-256，发布脚本清除受管理目录中的旧文件，

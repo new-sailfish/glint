@@ -3,7 +3,6 @@ name: Build Glint
 on:
   push:
     branches: [master, main]
-    tags: ['v*']
     paths-ignore: ['**/*.md', 'docs/**', '.superpowers/**', '.playwright-mcp/**']
   pull_request:
     paths-ignore: ['**/*.md', 'docs/**', '.superpowers/**', '.playwright-mcp/**']
@@ -113,39 +112,23 @@ jobs:
       - name: Package and verify Release
         shell: pwsh
         run: .\scripts\package-release.ps1
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Glint-exe-windows-x64
-          path: dist/Glint.exe
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Glint-win-x64
-          path: Glint-win-x64.zip
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Glint-release-manifest
-          path: dist/release-manifest.json
-          if-no-files-found: error
-  release:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: windows-release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: Glint-exe-windows-x64
-          path: release-assets
-      - uses: actions/download-artifact@v4
-        with:
-          name: Glint-win-x64
-          path: release-assets
-      - name: Upload release assets
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.reserve.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Glint ${{ steps.reserve.outputs.version }}
+          draft: false
+          prerelease: false
+          make_latest: 'true'
+          fail_on_unmatched_files: true
+          body: |
+            - **Glint.exe**: standalone Windows x64 application.
+            - **Glint-win-x64.zip**: full package with documentation and browser extension files.
+            - **release-manifest.json**: version, source commit, and SHA-256 hashes.
+
+            Built from `${{ github.sha }}` in [GitHub Actions](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
           files: |
-            release-assets/Glint.exe
-            release-assets/Glint-win-x64.zip
+            dist/Glint.exe
+            Glint-win-x64.zip
+            dist/release-manifest.json
