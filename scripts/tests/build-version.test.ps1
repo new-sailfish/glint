@@ -5,7 +5,7 @@ param([string]$Case = '*')
 $ErrorActionPreference = 'Stop'
 $repositoryDirectory = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $testDirectory = Join-Path ([IO.Path]::GetTempPath()) ('Glint-build-version-tests-' + [guid]::NewGuid().ToString('N'))
-$cmake = (Get-Command cmake -CommandType Application -ErrorAction Stop).Source
+$cmake = (Get-Command cmake -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 $originalOverride = $env:GLINT_CI_VERSION
 $failures = [Collections.Generic.List[string]]::new()
 $passed = 0
@@ -68,6 +68,24 @@ function Test-Case([string]$Name, [scriptblock]$Body) {
 }
 
 try {
+  Test-Case 'multiple CMake installations select the first executable' {
+    # Hosted Windows exposes standalone and Visual Studio copies of CMake.
+    # Exercise this harness with both discovery results without depending on
+    # the developer machine having two installations or changing its PATH.
+    $lines = @(& {
+      param([string]$Harness, [string]$Executable)
+      function Get-Command {
+        [CmdletBinding()]
+        param([string]$Name, [string]$CommandType)
+        if ($Name -ne 'cmake' -or $CommandType -ne 'Application') { throw 'Unexpected command lookup in fixture.' }
+        [pscustomobject]@{ Source = $Executable }
+        [pscustomobject]@{ Source = "$Executable.second-installation.exe" }
+      }
+      & $Harness -Case 'consecutive generations increment patch and preserve source files'
+    } $PSCommandPath $cmake)
+    Assert-True ($lines -contains '1 build-version tests passed; 0 failed.') 'Generation did not succeed with multiple CMake candidates.'
+  }
+
   Test-Case 'consecutive generations increment patch and preserve source files' {
     $fixture = New-Fixture
     $sources = @(Get-ChildItem -LiteralPath $fixture -File -Recurse)
