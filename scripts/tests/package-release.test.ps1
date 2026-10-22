@@ -6,6 +6,19 @@ $testDirectory = Join-Path ([IO.Path]::GetTempPath()) ('Glint-package-tests-' + 
 $gitCommand = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 $failures = [Collections.Generic.List[string]]::new()
 $passed = 0
+$fixtureBinaries = @{}
+$versionCases = @(
+  @{ Name = 'valid'; Version = '0.1.42'; FileVersion = '0.1.42.0'; FileParts = '0,1,42,0' }
+  @{ Name = 'missing'; Version = $null }
+  @{ Name = 'prerelease'; Version = '0.1.42-beta'; FileVersion = '0.1.42.0'; FileParts = '0,1,42,0' }
+  @{ Name = 'leading-zero'; Version = '00.1.42'; FileVersion = '0.1.42.0'; FileParts = '0,1,42,0' }
+  @{ Name = 'overflow'; Version = '65536.1.42'; FileVersion = '0.1.42.0'; FileParts = '0,1,42,0' }
+  @{ Name = 'four-part-product'; Version = '0.1.42.0'; FileVersion = '0.1.42.0'; FileParts = '0,1,42,0' }
+  @{ Name = 'three-part-file'; Version = '0.1.42'; FileVersion = '0.1.42'; FileParts = '0,1,42,0' }
+  @{ Name = 'different-file-version'; Version = '0.1.42'; FileVersion = '0.1.43.0'; FileParts = '0,1,43,0' }
+  @{ Name = 'different-native-file-parts'; Version = '0.1.42'; FileVersion = '0.1.42.0'; FileParts = '0,1,43,0' }
+  @{ Name = 'nonzero-native-revision'; Version = '0.1.42'; FileVersion = '0.1.42.0'; FileParts = '0,1,42,1' }
+)
 
 function Assert-True([bool]$Condition, [string]$Message) {
   if (-not $Condition) { throw $Message }
@@ -16,12 +29,63 @@ function Write-FixtureFile([string]$Path, [string]$Text) {
   [IO.File]::WriteAllText($Path, $Text)
 }
 
+function Initialize-FixtureBinaries {
+  $cmake = Get-Command cmake -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $cmake) { throw 'Packaging tests require CMake 3.21+ and VS 2022 with the C++ x64 tools to build native version fixtures.' }
+  $sourceDirectory = Join-Path $testDirectory 'native-fixtures'
+  $buildDirectory = Join-Path $sourceDirectory 'build'
+  Write-FixtureFile (Join-Path $sourceDirectory 'main.cpp') 'int main() { return 0; }'
+  $project = "cmake_minimum_required(VERSION 3.21)`nproject(GlintPackageFixtures LANGUAGES CXX RC)`n"
+  foreach ($entry in $versionCases) {
+    $name = $entry.Name
+    if ($null -eq $entry.Version) {
+      $project += "add_executable($name main.cpp)`n"
+    } else {
+      $resource = @"
+#include <windows.h>
+1 VERSIONINFO
+ FILEVERSION $($entry.FileParts)
+ PRODUCTVERSION 0,1,42,0
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE 0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "ProductName", "Packaging fixture\0"
+      VALUE "ProductVersion", "$($entry.Version)\0"
+      VALUE "FileVersion", "$($entry.FileVersion)\0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END
+"@
+      Write-FixtureFile (Join-Path $sourceDirectory "$name.rc") $resource
+      $project += "add_executable($name main.cpp $name.rc)`n"
+    }
+    $fixtureBinaries[$name] = Join-Path $buildDirectory "Release/$name.exe"
+  }
+  Write-FixtureFile (Join-Path $sourceDirectory 'CMakeLists.txt') $project
+  $output = & $cmake.Source -S $sourceDirectory -B $buildDirectory -G 'Visual Studio 17 2022' -A x64 2>&1
+  if ($LASTEXITCODE) { throw "Could not configure native packaging fixtures. Install VS 2022 C++ x64 tools and CMake 3.21+. $($output -join "`n")" }
+  $output = & $cmake.Source --build $buildDirectory --config Release --parallel 2>&1
+  if ($LASTEXITCODE) { throw "Could not build native packaging fixtures. $($output -join "`n")" }
+  $version = [Diagnostics.FileVersionInfo]::GetVersionInfo($fixtureBinaries['valid'])
+  Assert-True ($version.ProductVersion -eq '0.1.42' -and $version.FileVersion -eq '0.1.42.0') 'Native fixture version resources were not compiled correctly.'
+}
+
 function New-Fixture([switch]$NoGit) {
   $fixture = Join-Path $testDirectory ([guid]::NewGuid().ToString('N'))
   [IO.Directory]::CreateDirectory((Join-Path $fixture 'scripts')) | Out-Null
   Copy-Item -LiteralPath $packageScript -Destination (Join-Path $fixture 'scripts/package-release.ps1')
   foreach ($entry in @{
-      'build/release/Release/Glint.exe' = 'validated executable v1'
       'README.md' = 'English release instructions'
       'README.zh-CN.md' = 'Chinese release instructions'
       'docs/design.md' = 'Public design'
@@ -42,6 +106,9 @@ function New-Fixture([switch]$NoGit) {
     }.GetEnumerator()) {
     Write-FixtureFile (Join-Path $fixture $entry.Key) $entry.Value
   }
+  $fixtureBinary = Join-Path $fixture 'build/release/Release/Glint.exe'
+  [IO.Directory]::CreateDirectory((Split-Path -Parent $fixtureBinary)) | Out-Null
+  Copy-Item -LiteralPath $fixtureBinaries['valid'] -Destination $fixtureBinary
   if (-not $NoGit -and $gitCommand) {
     & $gitCommand.Source -C $fixture init --quiet
     if ($LASTEXITCODE) { throw 'Could not initialize fixture repository.' }
@@ -89,6 +156,32 @@ function Test-Case([string]$Name, [scriptblock]$Test) {
 
 [IO.Directory]::CreateDirectory($testDirectory) | Out-Null
 try {
+  Initialize-FixtureBinaries
+
+  Test-Case 'manifest versions come from the executable regardless of current source version' {
+    $fixture = New-Fixture
+    Write-FixtureFile (Join-Path $fixture 'VERSION') '9.9.9'
+    Write-FixtureFile (Join-Path $fixture 'build/release/generated/glint/version.h') '#define GLINT_VERSION "8.8.8"'
+    Invoke-Package $fixture
+    $manifest = Get-Content -LiteralPath (Join-Path $fixture 'dist/release-manifest.json') -Raw | ConvertFrom-Json
+    Assert-True ($manifest.Version -eq '0.1.42') 'Manifest Version was not read from the packaged executable ProductVersion.'
+    Assert-True ($manifest.FileVersion -eq '0.1.42.0') 'Manifest FileVersion was not read from the packaged executable.'
+    Assert-NoStaging $fixture
+  }
+
+  foreach ($versionCase in $versionCases | Where-Object Name -ne 'valid') {
+    Test-Case "a $($versionCase.Name) executable version is rejected without publication" {
+      $fixture = New-Fixture
+      Invoke-Package $fixture
+      $snapshot = Get-ReleaseSnapshot $fixture
+      Copy-Item -LiteralPath $fixtureBinaries[$versionCase.Name] -Destination (Join-Path $fixture 'build/release/Release/Glint.exe') -Force
+      Write-FixtureFile (Join-Path $fixture 'README.md') 'must not publish these docs'
+      Assert-PackageRejected $fixture 'version'
+      Assert-True ((Get-ReleaseSnapshot $fixture) -eq $snapshot) 'An invalid executable version changed the published release.'
+      Assert-NoStaging $fixture
+    }
+  }
+
   Test-Case 'only public documentation is packaged and earlier internal copies are removed' {
     $fixture = New-Fixture
     Invoke-Package $fixture
@@ -228,7 +321,9 @@ try {
     $fixture = New-Fixture
     Invoke-Package $fixture
     $snapshot = Get-ReleaseSnapshot $fixture
-    Write-FixtureFile (Join-Path $fixture 'build/release/Release/Glint.exe') 'validated executable v2'
+    $changedBinary = Join-Path $fixture 'build/release/Release/Glint.exe'
+    $stream = [IO.File]::Open($changedBinary, [IO.FileMode]::Append, [IO.FileAccess]::Write)
+    try { $stream.WriteByte(42) } finally { $stream.Dispose() }
     Write-FixtureFile (Join-Path $fixture 'README.md') 'new docs'
     $lock = [IO.File]::Open((Join-Path $fixture 'dist/Glint.exe'), [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     try { Assert-PackageRejected $fixture 'locked|running' } finally { $lock.Dispose() }

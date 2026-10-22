@@ -234,6 +234,13 @@ try {
     Assert-Tests $result 'CTest' $ctestNames
     Assert-Contains $result.Output 'configuration/resource change assets/glint.ico; full CTest set'
   }
+  Test-Case 'version floors and generated resource templates select the full CTest suite' {
+    foreach ($file in @('VERSION', 'app.manifest.in', 'cmake/glint_version.rc.in', 'cmake/GenerateBuildVersion.cmake')) {
+      $result = Invoke-Selector @{ List = $true; Files = @($file) }
+      Assert-Tests $result 'CTest' $ctestNames
+      Assert-Contains $result.Output "configuration/resource change $file; full CTest set"
+    }
+  }
   Test-Case 'CTest execution requires tests and exact mapped names' {
     $result = Invoke-Selector @{ Files = @('src/hotkey.cpp') }
     Assert-Success $result

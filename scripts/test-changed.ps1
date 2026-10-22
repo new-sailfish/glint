@@ -187,8 +187,9 @@ $fullCTestReason = ''
 $fullExtensionReason = ''
 foreach ($file in $changedFiles) {
   $normalized = Normalize-Path $file
-  if ($normalized -match '^(CMakeLists\.txt|CMakePresets\.json|app\.manifest)$' -or
+  if ($normalized -match '^(CMakeLists\.txt|CMakePresets\.json|VERSION|app\.manifest(\.in)?)$' -or
       $normalized -match '(^|/)(CMakeLists\.txt|CMakePresets\.json|[^/]+\.cmake)$' -or
+      $normalized -like 'cmake/*' -or
       $normalized -like 'assets/*' -or
       $normalized -match '\.(rc|def)$') {
     $fullCTest = $true

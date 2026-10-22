@@ -3,7 +3,7 @@ name: Build Glint
 on:
   push:
     branches: [master, main]
-    tags: ['*']
+    tags: ['v*']
     paths-ignore: ['**/*.md', 'docs/**', '.superpowers/**', '.playwright-mcp/**']
   pull_request:
     paths-ignore: ['**/*.md', 'docs/**', '.superpowers/**', '.playwright-mcp/**']
@@ -14,8 +14,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  windows-release:
-    runs-on: windows-latest
+  script-tests:
+    # Match the Visual Studio 2022 generator in CMakePresets.json.
+    runs-on: windows-2022
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up MSVC x64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          vsversion: '2022'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test development and release scripts
+        shell: pwsh
+        run: |
+          Get-ChildItem scripts/tests/*.test.ps1 | Sort-Object Name | ForEach-Object {
+            & pwsh -NoProfile -File $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Script tests failed: $($_.Name)" }
+          }
+  windows-preview:
+    if: github.event_name == 'pull_request'
+    needs: script-tests
+    # Match the Visual Studio 2022 generator in CMakePresets.json.
+    runs-on: windows-2022
     timeout-minutes: 30
     permissions:
       contents: read
@@ -28,52 +57,69 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+          vsversion: '2022'
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Test development and release scripts
-        shell: pwsh
-        run: |
-          Get-ChildItem scripts/tests/*.test.ps1 | Sort-Object Name | ForEach-Object {
-            & pwsh -NoProfile -File $_.FullName
-            if ($LASTEXITCODE -ne 0) { throw "Script tests failed: $($_.Name)" }
-          }
       - name: Configure Release x64
-        if: github.event_name == 'pull_request'
         run: cmake --preset release
       - name: Build Release x64
-        if: github.event_name == 'pull_request'
         run: cmake --build --preset release --parallel
       - name: Test changed targets (pull request)
-        if: github.event_name == 'pull_request'
         shell: pwsh
         env:
           TEST_BASE: ${{ github.event.pull_request.base.sha }}
         run: .\scripts\test-changed.ps1
-      - name: Validate and package complete Release
-        if: github.event_name != 'pull_request'
+  windows-release:
+    if: github.event_name != 'pull_request'
+    needs: script-tests
+    # Match the Visual Studio 2022 generator in CMakePresets.json.
+    runs-on: windows-2022
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up MSVC x64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          vsversion: '2022'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Keep allocation in this job so rerunning a failed build reserves again.
+      - name: Reserve official build version
+        id: reserve
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .\scripts\reserve-ci-version.ps1
+      - name: Validate and package complete Release
+        shell: pwsh
+        env:
+          GLINT_CI_VERSION: ${{ steps.reserve.outputs.version }}
         run: .\scripts\check-release.ps1
       - uses: actions/upload-artifact@v4
-        if: github.event_name != 'pull_request'
         with:
           name: Glint-exe-windows-x64
           path: dist/Glint.exe
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
-        if: github.event_name != 'pull_request'
         with:
           name: Glint-win-x64
           path: Glint-win-x64.zip
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
-        if: github.event_name != 'pull_request'
         with:
           name: Glint-release-manifest
           path: dist/release-manifest.json
           if-no-files-found: error
   release:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: windows-release
     runs-on: ubuntu-latest
     permissions:

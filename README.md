@@ -67,6 +67,30 @@ can skip completed steps explicitly, for example
 Skipping a validation check requires `-SkipPackage`, so a focused run cannot
 accidentally publish a release. Stop the desktop before the lifecycle smoke.
 
+### Automatic product versions
+
+Desktop builds increment the patch version: `0.1.0` → `0.1.1` → `0.1.2`.
+`VERSION` sets the manual version floor. Every build that includes the `glint`
+target consumes the next number, including an otherwise up-to-date build;
+configure-only, test-only targets, and repackaging do not. Failed builds can
+leave gaps. The local counter lives in ignored `.local/build-version/`, shared
+by Debug and Release, and survives deleting `build/`. Preserve that directory
+to preserve your local numbering. Invalid or exhausted counters fail explicitly.
+
+Official CI builds have an independent counter. After script checks pass,
+GitHub Actions reserves the next `build-version/0.1.N` tag atomically; reruns
+reserve another number. These tags record allocations and are not Releases.
+Do not delete them if you want CI numbering to remain continuous. Pull requests
+use an isolated local preview counter and have no tag-writing permission.
+Only `v*` tags trigger the existing release-publishing workflow.
+
+The product version appears in the window title, tray tooltip and EXE properties.
+Windows stores the numeric file version as `0.1.N.0`; the release manifest records
+both forms directly from the packaged EXE. Local and CI versions can share a
+number, so use the manifest's commit and file hashes to identify the exact build.
+The browser extension's version and Native Messaging protocol version are separate.
+Generated version files stay under `build/` and do not modify tracked sources.
+
 For a quick pull-request feedback loop, list tests selected by the current diff:
 
 ```powershell
@@ -308,7 +332,8 @@ browser launching, and the real Win32 guide's navigation, connection gating,
 keyboard focus and 100/150/200% DPI layout. Real isolated Windows pipe tests
 cover duplex forwarding, invalid/fragmented frames, EOF, disconnect, shutdown
 races, independent clients, bounded outbound queues and stalled-peer failures.
-GitHub Actions builds Release x64 on `windows-latest`. Pull requests run smoke
+GitHub Actions builds Release x64 on `windows-2022` with VS 2022, matching the
+CMake preset instead of following changes to `windows-latest`. Pull requests run smoke
 and change-related tests; `master`/`main`, tags and manual runs execute the same
 complete `check-release.ps1` gate used locally and upload the standalone EXE,
 full ZIP, and hash manifest. Documentation-only changes skip CI, and newer
@@ -327,6 +352,8 @@ dependencies. Run the relevant harness when changing a development script:
 pwsh -NoProfile -File scripts/tests/test-changed.test.ps1
 pwsh -NoProfile -File scripts/tests/check-release.test.ps1
 pwsh -NoProfile -File scripts/tests/package-release.test.ps1
+pwsh -NoProfile -File scripts/tests/build-version.test.ps1
+pwsh -NoProfile -File scripts/tests/reserve-ci-version.test.ps1
 ```
 
 ## Source layout
@@ -340,6 +367,7 @@ pwsh -NoProfile -File scripts/tests/package-release.test.ps1
 - `extension/`: shared Chrome/Edge MV3 extension and its tests.
 - `tests/`: C++ core and native Windows regression tests.
 - `.github/workflows/`, `scripts/`: build, import checks and packaging.
+- `VERSION`, `cmake/`, `app.manifest.in`: automatic product-version generation.
 - `docs/`: public architecture, protocol, branding and README artwork.
 
 Release documentation is explicitly selected in `scripts/package-release.ps1`.

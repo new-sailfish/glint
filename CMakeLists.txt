@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
-project(Glint VERSION 0.1.0 LANGUAGES CXX)
+include(cmake/BuildVersion.cmake)
+glint_read_version("${CMAKE_CURRENT_SOURCE_DIR}/VERSION" GLINT_BASE_VERSION)
+project(Glint VERSION ${GLINT_BASE_VERSION} LANGUAGES CXX)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
 
 include(CTest)
 
@@ -34,6 +37,7 @@ if(WIN32)
     src/bridge_installation.cpp
     src/win_resources.rc
   )
+  glint_add_build_version(glint)
   target_link_libraries(glint PRIVATE glint_core user32 shell32 comctl32 advapi32 ole32 bcrypt)
   target_include_directories(glint PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
   target_compile_features(glint PRIVATE cxx_std_20)

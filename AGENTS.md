@@ -9,6 +9,7 @@
 - Run relevant checks once after code is complete. Documentation/comment-only changes do not need another application test run; don't repeat passing checks after edits that cannot affect their result.
 - Before handing over a Release, run `scripts/check-release.ps1`: configure/build, full CTest, extension tests, lifecycle smoke, imports, package/hash verification. Focused `-Skip...` runs are not release validation; skipping a validation check also requires `-SkipPackage`.
 - CI runs changed tests for pull requests and complete Release validation for `master`/`main`, tags, and manual runs. Documentation-only changes skip CI. Keep local and CI commands synchronized.
+- Keep CI on `windows-2022` with VS 2022 while the CMake preset requires the VS 17 generator. Product versions come from `VERSION` and the build-time generator; never edit generated headers or binaries to change a version. Local counters under `.local/build-version/` and official CI `build-version/*` allocation tags are independent; preserve both. Only `v*` tags publish Releases.
 
 ## Validated release builds
 

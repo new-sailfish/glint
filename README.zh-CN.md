@@ -163,6 +163,26 @@ Chrome 中 Glint 卡片已经消失时，直接加载新目录即可；Edge 如�
 传入对应的 `-Skip...` 参数；跳过验证项时必须同时传入 `-SkipPackage`，
 避免局部检查误发布。生命周期 smoke 运行前应退出桌面程序。
 
+### 自动版本号
+
+桌面程序每次构建递增补丁号：`0.1.0` → `0.1.1` → `0.1.2`。
+`VERSION` 设置人工维护的版本下限。每次构建包含 `glint` 目标时都会领取下一个号码，
+即使其他源码没有改动；仅配置 CMake、只构建测试目标或重新打包不会递增。
+失败构建用掉的号码不回退，因此号码可以有间隔。
+
+本地计数保存在已忽略的 `.local/build-version/`，Debug 和 Release 共用，
+删除 `build/` 不会重置。请保留该目录以延续本地计数；计数损坏或超出范围会明确报错。
+CI 使用独立计数：脚本检查通过后，通过创建 `build-version/0.1.N` 标签原子地领取
+下一个补丁号，重新运行也会领取新号。这些标签只是构建编号记录，不是 Releases，
+不要删除它们以免影响计数。PR 使用隔离的本地预览计数，不能写入构建标签；
+只有 `v*` 标签会触发现有的 Release 发布流程。
+
+窗口标题、托盘提示和 EXE 属性都显示产品版本。Windows 数字文件版本为 `0.1.N.0`，
+发布清单直接读取打包 EXE 的版本，记录产品版本和文件版本。
+本地与 CI 可以出现相同号码，请结合清单中的提交和哈希识别具体构建。
+浏览器扩展版本和 Native Messaging 协议版本独立维护；自动生成文件位于 `build/`，
+不会改动已提交的源码。
+
 改动 C++ 后先构建 Release，再执行 `.\scripts\test-changed.ps1`。
 选测脚本不会编译；可用 `-Base <ref>`、`TEST_BASE` 或明确文件路径控制范围：
 
@@ -170,9 +190,10 @@ Chrome 中 Glint 卡片已经消失时，直接加载新目录即可；Edge 如�
 .\scripts\test-changed.ps1 src/hotkey.cpp extension/options.js
 ```
 
-CI 中 PR 只跑 smoke 和相关测试；`master`/`main`、标签和手动运行执行完整
+CI 固定使用 `windows-2022` 和 VS 2022，与 CMake 预设匹配。PR 只跑 smoke 和相关测试；
+`master`/`main`、`v*` 标签和手动运行执行完整
 Release 门禁。仅文档改动跳过 CI。发布清单 `dist/release-manifest.json`
-记录提交、未提交改动状态及各文件 SHA-256，发布脚本清除受管理目录中的旧文件，
+记录版本、提交、未提交改动状态及各文件 SHA-256，发布脚本清除受管理目录中的旧文件，
 保留已安装扩展使用的 `dist/browser-extension` 路径。
 
 发布包中的文档由 `scripts/package-release.ps1` 明确列出，包括架构、协议、

@@ -1,6 +1,7 @@
 #include "win_app.hpp"
 
 #include "glint/core.hpp"
+#include "glint_version.h"
 #include "connection_overview.hpp"
 #include "registration.hpp"
 #include "pipe_server.hpp"
@@ -234,7 +235,7 @@ private:
         const auto& work = monitor.rcWork;
         const int width = (std::min)(frame.right - frame.left, work.right - work.left);
         const int height = (std::min)(frame.bottom - frame.top, work.bottom - work.top);
-        window_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_CONTROLPARENT, kClassName, L"Glint", style,
+        window_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_CONTROLPARENT, kClassName, L"Glint " GLINT_VERSION_WSTRING, style,
             work.left + (work.right - work.left - width) / 2,
             work.top + (work.bottom - work.top - height) / 2,
             width, height, nullptr, nullptr, klass.hInstance, this);
@@ -302,7 +303,7 @@ private:
             MessageBoxW(window_, (hotkey_error + L"\n可从托盘打开“配置全局热键”修改。").c_str(), L"Glint", MB_OK | MB_ICONWARNING);
         }
         tray_.cbSize = sizeof(tray_); tray_.hWnd = window_; tray_.uID = 1; tray_.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP; tray_.uCallbackMessage = WM_TRAY_EVENT;
-        tray_.hIcon = ui::icon(klass.hInstance); wcscpy_s(tray_.szTip, L"Glint 标签页搜索"); add_tray();
+        tray_.hIcon = ui::icon(klass.hInstance); wcscpy_s(tray_.szTip, L"Glint " GLINT_VERSION_WSTRING L" · 标签页搜索"); add_tray();
         layout();
         return true;
     }

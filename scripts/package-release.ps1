@@ -59,6 +59,22 @@ function Get-Digest([string]$Path) {
   return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
 }
 
+function Get-BinaryVersion([string]$Path) {
+  $metadata = [Diagnostics.FileVersionInfo]::GetVersionInfo($Path)
+  $version = $metadata.ProductVersion
+  if ($version -cnotmatch '^(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})$' -or
+      @($version.Split('.') | Where-Object { [int]$_ -gt 65535 }).Count) {
+    throw "Binary ProductVersion must be major.minor.patch with components from 0 to 65535: $Path"
+  }
+  $fileVersion = "$version.0"
+  $nativeFileVersion = '{0}.{1}.{2}.{3}' -f $metadata.FileMajorPart, $metadata.FileMinorPart,
+    $metadata.FileBuildPart, $metadata.FilePrivatePart
+  if ($metadata.FileVersion -cne $fileVersion -or $nativeFileVersion -cne $fileVersion) {
+    throw "Binary FileVersion string and native version must both match ProductVersion with a zero revision ($fileVersion): $Path"
+  }
+  return [pscustomobject]@{ Version = $version; FileVersion = $fileVersion }
+}
+
 function Assert-BinaryCanPublish([string]$SourceHash) {
   $publishedBinary = Get-ReleasePath 'Glint.exe'
   if (-not (Test-Path -LiteralPath $publishedBinary)) { return $false }
@@ -197,6 +213,9 @@ try {
     $hashes[$entry.Key] = $stagedHash
   }
 
+  # Describe the executable bytes being packaged, including when current source
+  # version files have advanced since this validated binary was built.
+  $binaryVersion = Get-BinaryVersion $packageFiles['Glint.exe']
   $commit = 'unknown'
   $dirty = $null
   $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -212,6 +231,8 @@ try {
   }
   $manifest = [ordered]@{
     Product = 'Glint'
+    Version = $binaryVersion.Version
+    FileVersion = $binaryVersion.FileVersion
     Commit = $commit
     WorkingTreeDirty = $dirty
     Binary = 'Glint.exe'
