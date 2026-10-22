@@ -11,6 +11,21 @@ Every browser profile owns a bridge connection. The desktop assigns a local
 The bridge sends a new `hello` after every reconnect, followed by a complete
 `snapshot`.
 
+The browser-owned native host remains alive while the desktop is stopped.
+Native host → extension control frames use:
+
+```json
+{"type":"desktop_status","version":1,"state":"waiting"}
+{"type":"desktop_status","version":1,"state":"connected","generation":1}
+```
+
+`waiting` keeps the native port alive and sends no tab metadata. Each
+`connected` session requires a fresh hello and snapshot. The extension attaches
+`desktopGeneration` to its outgoing messages; the host forwards only the current
+generation and discards offline/stale messages instead of queuing them. This
+field is local to the bridge and is separate from desktop connection IDs.
+The extension UI distinguishes a native port from a connected desktop.
+
 ```json
 {"type":"hello","version":1,"sessionId":"runtime-session",
  "profileId":"profile-id","browser":"Chrome","profileLabel":"Default"}

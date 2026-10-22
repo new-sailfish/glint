@@ -2,11 +2,16 @@
   "manifest_version": 3,
   "name": "Glint Tab Search Connector",
   "description": "Connects this Chrome or Edge profile's open tabs to Glint.",
-  "version": "0.1.0",
-  "minimum_chrome_version": "88",
+  "version": "0.1.6",
+  "minimum_chrome_version": "105",
   "permissions": ["tabs", "nativeMessaging", "storage"],
   "background": { "service_worker": "background.js" },
   "options_page": "options.html",
-  "action": { "default_title": "Glint" },
+  "icons": { "16": "icon-16.png", "32": "icon-32.png", "48": "icon-48.png", "128": "icon-128.png" },
+  "action": {
+    "default_title": "Glint · 连接状态",
+    "default_popup": "options.html",
+    "default_icon": { "16": "icon-16.png", "32": "icon-32.png" }
+  },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0zMDUcSxCgwFSZx8pLLRjAf5VsBAkmcwTiVrnLzK+MiiqGON0dYz5O0L9enTLX9hputXc7rhBR+W/TG0htKlwfUcHZkDnyzKiV/VQg5ff4NyQgO/ndryZm8kNo+lwv1F6NaipjoUSAVK9KSnKcW1cnWrQcmPjiwMZH7Xqh8orxMef6ZRYJ3jhAbnUXcwvugAKhv9cQrcj3jespUh+M3gQmcy1pj4PkDsNCttamSTk8GvRiWA00ptzwXyeeoYSFIiJtdDhGcHEazHOSOX/S7DV82chxoDhCgu8J1pEAHDzVxCSMyYNiAD0PRJq4lxXKmcaET9aCZMOW8MvOYXl0cBJQIDAQAB"
 }

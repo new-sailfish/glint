@@ -2,44 +2,94 @@ name: Build Glint
 
 on:
   push:
+    branches: [master, main]
+    tags: ['*']
+    paths-ignore: ['**/*.md', 'docs/**', '.superpowers/**', '.playwright-mcp/**']
   pull_request:
+    paths-ignore: ['**/*.md', 'docs/**', '.superpowers/**', '.playwright-mcp/**']
   workflow_dispatch:
+
+concurrency:
+  group: glint-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   windows-release:
     runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up MSVC x64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - name: Test extension
-        run: npm --prefix extension test
-      - name: Configure Release x64
-        run: cmake --preset release
-      - name: Build Release x64
-        run: cmake --build --preset release --parallel
-      - name: Test C++ core
-        run: ctest --preset release --output-on-failure
-      - name: Check imports
-        shell: pwsh
-        run: .\scripts\check-imports.ps1 -Binary .\build\release\Release\Glint.exe
-      - name: Package
+          node-version: 22
+      - name: Test development and release scripts
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item .\build\release\Release\Glint.exe dist\Glint.exe
-          Copy-Item .\extension dist\extension -Recurse
-          Copy-Item .\README.md dist\README.md
-          Copy-Item .\README.zh-CN.md dist\README.zh-CN.md
-          Copy-Item .\docs dist\docs -Recurse
-          Compress-Archive -Path dist\Glint.exe,dist\extension,dist\README.md,dist\README.zh-CN.md,dist\docs -DestinationPath Glint-win-x64.zip -Force
+          Get-ChildItem scripts/tests/*.test.ps1 | Sort-Object Name | ForEach-Object {
+            & pwsh -NoProfile -File $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Script tests failed: $($_.Name)" }
+          }
+      - name: Configure Release x64
+        if: github.event_name == 'pull_request'
+        run: cmake --preset release
+      - name: Build Release x64
+        if: github.event_name == 'pull_request'
+        run: cmake --build --preset release --parallel
+      - name: Test changed targets (pull request)
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          TEST_BASE: ${{ github.event.pull_request.base.sha }}
+        run: .\scripts\test-changed.ps1
+      - name: Validate and package complete Release
+        if: github.event_name != 'pull_request'
+        shell: pwsh
+        run: .\scripts\check-release.ps1
       - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: Glint-exe-windows-x64
+          path: dist/Glint.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
         with:
           name: Glint-win-x64
           path: Glint-win-x64.zip
-      - name: Upload release asset
-        if: startsWith(github.ref, 'refs/tags/')
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: Glint-release-manifest
+          path: dist/release-manifest.json
+          if-no-files-found: error
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: windows-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Glint-exe-windows-x64
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: Glint-win-x64
+          path: release-assets
+      - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: Glint-win-x64.zip
+          files: |
+            release-assets/Glint.exe
+            release-assets/Glint-win-x64.zip

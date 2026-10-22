@@ -1,6 +1,7 @@
 #include "win_app.hpp"
 #include "registration.hpp"
 #include "extension_identity.hpp"
+#include "bridge_installation.hpp"
 
 #include "glint/core.hpp"
 #include "win_common.hpp"
@@ -24,16 +25,6 @@ constexpr wchar_t kChromeKey[] = L"Software\\Google\\Chrome\\NativeMessagingHost
 constexpr wchar_t kEdgeKey[] = L"Software\\Microsoft\\Edge\\NativeMessagingHosts\\com.glint.host";
 constexpr wchar_t kOnboardingKey[] = L"Software\\Glint";
 constexpr wchar_t kOnboardingValue[] = L"OnboardingDismissed";
-
-std::wstring module_path() {
-    std::wstring path(MAX_PATH, L'\0');
-    for (;;) {
-        const DWORD count = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
-        if (count == 0) return {};
-        if (count < path.size() - 1) { path.resize(count); return path; }
-        path.resize(path.size() * 2);
-    }
-}
 
 bool read_registry_string(const wchar_t* subkey, std::wstring& value) {
     HKEY key = nullptr;
@@ -94,13 +85,7 @@ bool same_file_as_current(const std::filesystem::path& manifest_path, std::wstri
     if (path_text.empty() || path_text.find(L'\0') != std::wstring_view::npos) return false;
     std::filesystem::path candidate{std::wstring(path_text)};
     if (candidate.is_relative()) candidate = manifest_path.parent_path() / candidate;
-    const auto current = std::filesystem::path(module_path());
-    std::error_code candidate_error;
-    std::error_code current_error;
-    if (current.empty() || !std::filesystem::is_regular_file(candidate, candidate_error) ||
-        !std::filesystem::is_regular_file(current, current_error) || candidate_error || current_error) return false;
-    std::error_code equivalent_error;
-    return std::filesystem::equivalent(candidate, current, equivalent_error) && !equivalent_error;
+    return bridge_installation::is_current_bridge(candidate);
 }
 
 struct ManifestInfo {
@@ -108,10 +93,19 @@ struct ManifestInfo {
     bool current = false;
 };
 
-ManifestInfo inspect_manifest(const std::filesystem::path& manifest_path) {
+std::vector<std::wstring> bundled_ids(std::wstring& error) {
+    // This remains the legacy directory's identity. New bundles are extracted
+    // into browser-extension with a fixed key; no new path-ID origin is needed.
+    const auto directory = std::filesystem::path(win::local_app_data()) / L"Glint" / L"extension";
+    const auto path_id = setup::legacy_unpacked_id(directory, error);
+    if (path_id.empty()) return {};
+    std::vector<std::wstring> ids{utf8_to_wide(setup::kBundledExtensionId)};
+    if (path_id != ids.front()) ids.push_back(path_id);
+    return ids;
+}
+
+ManifestInfo inspect_manifest_text(const std::filesystem::path& manifest_path, const std::string& text) {
     ManifestInfo result;
-    std::string text;
-    if (!read_file_limited(manifest_path, text)) return result;
     try {
         const Json manifest = Json::parse(text);
         if (!manifest.is_object()) return result;
@@ -123,20 +117,34 @@ ManifestInfo inspect_manifest(const std::filesystem::path& manifest_path) {
         if (!name || !name->is_string() || name->as_string() != "com.glint.host" ||
             !description || !description->is_string() || !type || !type->is_string() || type->as_string() != "stdio" ||
             !path || !path->is_string() || path->as_string().empty() ||
-            !origins || !origins->is_array() || origins->as_array().size() != 1) return result;
-        std::wstring first_id;
+            !origins || !origins->is_array() || origins->as_array().empty() || origins->as_array().size() > 2) return result;
+        std::vector<std::wstring> ids;
         for (const Json& origin : origins->as_array()) {
             if (!origin.is_string()) return result;
             std::wstring id;
             if (!parse_origin(origin.as_string(), id)) return result;
-            if (first_id.empty()) first_id = std::move(id);
+            ids.push_back(std::move(id));
         }
-        result.id = std::move(first_id);
+        if (ids.size() == 2) {
+            std::wstring error;
+            auto expected = bundled_ids(error);
+            if (expected.size() != 2) return result;
+            std::sort(expected.begin(), expected.end());
+            auto sorted = ids;
+            std::sort(sorted.begin(), sorted.end());
+            if (sorted != expected) return result;
+            result.id = utf8_to_wide(setup::kBundledExtensionId);
+        } else result.id = ids.front();
         result.current = same_file_as_current(manifest_path, utf8_to_wide(path->as_string()));
     } catch (const ProtocolError&) {
         return {};
     }
     return result;
+}
+
+ManifestInfo inspect_manifest(const std::filesystem::path& manifest_path) {
+    std::string text;
+    return read_file_limited(manifest_path, text) ? inspect_manifest_text(manifest_path, text) : ManifestInfo{};
 }
 
 void read_browser_registration(const wchar_t* subkey, std::wstring& id, bool& current) {
@@ -147,13 +155,15 @@ void read_browser_registration(const wchar_t* subkey, std::wstring& id, bool& cu
     current = info.current;
 }
 
-bool write_manifest(const std::filesystem::path& path, std::wstring_view executable, std::wstring_view extension_id) {
+bool write_manifest(const std::filesystem::path& path, std::wstring_view executable, const std::vector<std::wstring>& ids) {
+    Json::Array origins;
+    for (const auto& id : ids) origins.emplace_back("chrome-extension://" + wide_to_utf8(id) + "/");
     const Json manifest = Json::Object{
         {"name", "com.glint.host"},
         {"description", "Glint browser tab search native host"},
         {"path", wide_to_utf8(executable)},
         {"type", "stdio"},
-        {"allowed_origins", Json::Array{"chrome-extension://" + wide_to_utf8(extension_id) + "/"}}
+        {"allowed_origins", std::move(origins)}
     };
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     if (!output) return false;
@@ -184,13 +194,73 @@ bool remove_manifest(const std::filesystem::path& path) {
     return !error;
 }
 
+int register_origin_sets(const std::vector<std::wstring>& chrome_ids, const std::vector<std::wstring>& edge_ids, std::wstring& error) {
+    std::filesystem::path bridge;
+    if (!bridge_installation::ensure_current(bridge, error)) return 1;
+    const std::wstring executable = bridge.wstring();
+    const std::filesystem::path directory = std::filesystem::path(win::local_app_data()) / L"Glint";
+    std::error_code create_error;
+    std::filesystem::create_directories(directory, create_error);
+    if (create_error) { error = L"无法创建注册目录：" + directory.wstring(); return 1; }
+    const auto chrome_manifest = directory / L"com.glint.host.chrome.json";
+    const auto edge_manifest = directory / L"com.glint.host.edge.json";
+    bool success = true;
+    if (!chrome_ids.empty()) success = write_manifest(chrome_manifest, executable, chrome_ids) && set_registry(kChromeKey, chrome_manifest) && success;
+    if (!edge_ids.empty()) success = write_manifest(edge_manifest, executable, edge_ids) && set_registry(kEdgeKey, edge_manifest) && success;
+    if (!success) { error = L"Native Messaging 注册失败，请检查当前用户的注册表和注册目录是否可写。"; return 1; }
+    return 0;
+}
+
 } // namespace
 
 namespace setup {
 
+bool migrate_existing_hosts(std::wstring& error) {
+    error.clear();
+    std::filesystem::path bridge;
+    for (const auto key : {kChromeKey, kEdgeKey}) {
+        std::wstring registry_path;
+        if (!read_registry_string(key, registry_path)) continue;
+        const std::filesystem::path manifest_path(registry_path);
+        std::string text;
+        if (!read_file_limited(manifest_path, text)) continue;
+        const auto existing = inspect_manifest_text(manifest_path, text);
+        // Never infer extra origins or configure a browser that was absent.
+        // Invalid manifests require explicit repair through the normal setup UI.
+        if (existing.id.empty() || existing.current) continue;
+        if (bridge.empty() && !bridge_installation::ensure_current(bridge, error)) return false;
+        Json manifest;
+        try { manifest = Json::parse(text); }
+        catch (const ProtocolError&) { error = L"现有浏览器通信桥配置已变化，请重新连接浏览器。"; return false; }
+        manifest["path"] = wide_to_utf8(bridge.wstring());
+        const auto temporary = manifest_path.parent_path() / (manifest_path.filename().wstring() +
+            L".migrate-" + std::to_wstring(GetCurrentProcessId()) + L".tmp");
+        {
+            std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+            const auto updated = manifest.dump() + "\n";
+            output.write(updated.data(), static_cast<std::streamsize>(updated.size()));
+            output.close();
+            if (!output) {
+                DeleteFileW(temporary.c_str());
+                error = L"无法保存浏览器通信桥配置：" + manifest_path.wstring();
+                return false;
+            }
+        }
+        if (!MoveFileExW(temporary.c_str(), manifest_path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+            const DWORD failure = GetLastError();
+            DeleteFileW(temporary.c_str());
+            error = L"无法更新浏览器通信桥配置：" + win::last_error_text(failure);
+            return false;
+        }
+    }
+    return true;
+}
+
 bool register_bundled_host(bool edge, std::wstring& error) {
-    const std::wstring id = utf8_to_wide(kBundledExtensionId);
-    return edge ? register_hosts(L"", id, error) == 0 : register_hosts(id, L"", error) == 0;
+    error.clear();
+    const auto ids = bundled_ids(error);
+    if (ids.empty()) return false;
+    return edge ? register_origin_sets({}, ids, error) == 0 : register_origin_sets(ids, {}, error) == 0;
 }
 
 bool valid_extension_id(std::wstring_view id) { return valid_extension_id_impl(id); }
@@ -213,19 +283,8 @@ int register_hosts(std::wstring_view chrome_id, std::wstring_view edge_id, std::
         error = L"扩展 ID 必须是 32 位小写 a-p 字符。未写入任何注册信息。";
         return 2;
     }
-    const std::wstring executable = module_path();
-    if (executable.empty()) { error = L"无法确定 Glint.exe 的路径。"; return 1; }
-    const std::filesystem::path directory = std::filesystem::path(win::local_app_data()) / L"Glint";
-    std::error_code create_error;
-    std::filesystem::create_directories(directory, create_error);
-    if (create_error) { error = L"无法创建注册目录：" + directory.wstring(); return 1; }
-    const auto chrome_manifest = directory / L"com.glint.host.chrome.json";
-    const auto edge_manifest = directory / L"com.glint.host.edge.json";
-    bool success = true;
-    if (has_chrome) success = write_manifest(chrome_manifest, executable, normalized_chrome) && set_registry(kChromeKey, chrome_manifest) && success;
-    if (has_edge) success = write_manifest(edge_manifest, executable, normalized_edge) && set_registry(kEdgeKey, edge_manifest) && success;
-    if (!success) { error = L"Native Messaging 注册失败，请检查当前用户的注册表和注册目录是否可写。"; return 1; }
-    return 0;
+    return register_origin_sets(has_chrome ? std::vector<std::wstring>{normalized_chrome} : std::vector<std::wstring>{},
+                                has_edge ? std::vector<std::wstring>{normalized_edge} : std::vector<std::wstring>{}, error);
 }
 
 bool onboarding_dismissed() {

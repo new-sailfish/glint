@@ -1,5 +1,6 @@
 #include "registration.hpp"
 #include "extension_identity.hpp"
+#include "bridge_installation.hpp"
 #include "win_app.hpp"
 
 #include "glint/core.hpp"
@@ -162,7 +163,10 @@ void independent_browser_registration() {
         const auto manifest = load_manifest(key);
         require(manifest.at("name").as_string() == "com.glint.host", "manifest native host name");
         require(manifest.at("type").as_string() == "stdio", "manifest host transport");
-        require(manifest.at("path").as_string() == glint::wide_to_utf8(current_executable()), "manifest targets actual current executable");
+        const std::filesystem::path bridge{glint::utf8_to_wide(manifest.at("path").as_string())};
+        require(bridge.filename() == L"GlintBridge.exe" && bridge.parent_path().filename().wstring().size() == 64 &&
+            bridge.parent_path().parent_path() == sandbox.directory() / L"Glint" / L"bridge",
+            "manifest targets content-addressed GlintBridge executable instead of desktop");
         const auto& origins = manifest.at("allowed_origins").as_array();
         require(origins.size() == 1 && origins[0].as_string() == "chrome-extension://" + glint::wide_to_utf8(id) + "/",
                 "manifest allows only requested extension origin");
@@ -194,12 +198,50 @@ void bundled_registration_only_changes_selected_browser() {
         require(std::filesystem::last_write_time(other_path) == other_timestamp, "other browser manifest is not rewritten");
         const auto manifest = load_manifest(selected_key);
         const auto& origins = manifest.at("allowed_origins").as_array();
-        require(origins.size() == 1 && origins[0].as_string() ==
-                std::string("chrome-extension://") + glint::setup::kBundledExtensionId + "/",
-                "bundled manifest allows only fixed extension origin");
+        std::wstring identity_error;
+        const auto path_id = glint::setup::legacy_unpacked_id(sandbox.directory() / L"Glint" / L"extension", identity_error);
+        require(!path_id.empty() && identity_error.empty(), "calculate known bundle directory identity");
+        require(origins.size() == 2 && origins[0].as_string() ==
+                std::string("chrome-extension://") + glint::setup::kBundledExtensionId + "/" &&
+                origins[1].as_string() == "chrome-extension://" + glint::wide_to_utf8(path_id) + "/",
+                "bundled manifest allows only public-key and stable bundle path identities");
         require(registered_manifest(selected_key).parent_path() == sandbox.directory() / L"Glint",
                 "bundled manifest uses isolated LOCALAPPDATA");
     }
+}
+
+void bundled_manifest_reader_restricts_multiple_origins() {
+    Sandbox sandbox;
+    std::wstring error;
+    require(glint::setup::register_bundled_host(false, error), "prepare bundled registration");
+    auto manifest = load_manifest(kChromeKey);
+    const auto original = manifest;
+    auto origins = manifest.at("allowed_origins").as_array();
+    require(origins.size() == 2, "bundled registration has exactly two origins");
+    std::swap(origins[0], origins[1]);
+    manifest["allowed_origins"] = origins;
+    replace_manifest(kChromeKey, manifest);
+    auto state = glint::setup::read_registration();
+    require(state.chrome_current && state.chrome_id == glint::utf8_to_wide(glint::setup::kBundledExtensionId),
+            "known pair is accepted in either order and reports public-key identity");
+
+    for (const auto& invalid_origins : {
+             glint::Json::Array{origins[0], origins[0]},
+             glint::Json::Array{origins[0], "chrome-extension://abcdefghijklmnopabcdefghijklmnop/"},
+             glint::Json::Array{origins[0], origins[1], "chrome-extension://abcdefghijklmnopabcdefghijklmnop/"},
+             glint::Json::Array{"chrome-extension://*/"},
+             glint::Json::Array{}}) {
+        manifest = original;
+        manifest["allowed_origins"] = invalid_origins;
+        replace_manifest(kChromeKey, manifest);
+        state = glint::setup::read_registration();
+        require(!state.chrome_current && state.chrome_id.empty(), "reject duplicates, arbitrary pairs, extra origins, wildcards and empty lists");
+    }
+
+    require(glint::setup::register_hosts(kChromeId, L"", error) == 0, "manual repair replaces bundled origins");
+    const auto manual_origins = load_manifest(kChromeKey).at("allowed_origins").as_array();
+    require(manual_origins.size() == 1 && manual_origins[0].as_string() ==
+            "chrome-extension://" + glint::wide_to_utf8(kChromeId) + "/", "manual registration restricts to supplied ID");
 }
 
 void bundled_registration_reports_write_failure() {
@@ -223,10 +265,23 @@ void stale_and_invalid_manifests() {
     require(state.chrome_id == kChromeId && !state.chrome_current, "old executable path retains ID but requires re-registration");
 
     manifest = original;
-    const auto executable = std::filesystem::path(current_executable());
+    const auto executable = std::filesystem::path(glint::utf8_to_wide(original.at("path").as_string()));
     manifest["path"] = glint::wide_to_utf8((executable.parent_path() / L"." / executable.filename()).wstring());
     replace_manifest(kChromeKey, manifest);
     require(glint::setup::read_registration().chrome_current, "equivalent executable path remains current");
+
+    manifest = original;
+    manifest["path"] = glint::wide_to_utf8(current_executable());
+    replace_manifest(kChromeKey, manifest);
+    state = glint::setup::read_registration();
+    require(state.chrome_id == kChromeId && !state.chrome_current, "legacy desktop host retains ID and requires migration");
+
+    manifest = original;
+    const auto bridge = std::filesystem::path(glint::utf8_to_wide(original.at("path").as_string()));
+    { std::ofstream modified(bridge, std::ios::binary | std::ios::trunc); modified << "modified binary"; }
+    require(!glint::setup::read_registration().chrome_current, "modified bridge bytes require repair");
+    std::filesystem::path repaired;
+    require(glint::bridge_installation::ensure_current(repaired, error), "restore bridge for manifest validation");
 
     for (const auto* field : {"name", "type"}) {
         manifest = original;
@@ -245,18 +300,61 @@ void stale_and_invalid_manifests() {
     require(!glint::setup::read_registration().chrome_current, "missing manifest is not registered");
 }
 
+void migration_preserves_origins_without_configuring_other_browsers() {
+    Sandbox sandbox;
+    std::wstring error;
+    require(glint::setup::migrate_existing_hosts(error) && error.empty(), "empty registration migration succeeds");
+    require(!std::filesystem::exists(sandbox.directory() / L"Glint"), "empty migration writes no files or browser registration");
+    require(glint::setup::register_hosts(kChromeId, L"", error) == 0, "prepare custom Chrome registration");
+    auto manifest = load_manifest(kChromeKey);
+    manifest["path"] = glint::wide_to_utf8(current_executable());
+    manifest["description"] = "custom retained description";
+    replace_manifest(kChromeKey, manifest);
+    const auto origins = manifest.at("allowed_origins").dump();
+    require(!glint::setup::read_registration().chrome_current, "legacy desktop target is stale");
+    require(glint::setup::migrate_existing_hosts(error) && error.empty(), "migrate configured browser automatically");
+    const auto migrated = load_manifest(kChromeKey);
+    require(migrated.at("allowed_origins").dump() == origins &&
+        migrated.at("description").as_string() == "custom retained description", "migration only changes binary path");
+    auto state = glint::setup::read_registration();
+    require(state.chrome_current && state.chrome_id == kChromeId && state.edge_id.empty() && !state.edge_current,
+        "migration updates existing browser without adding Edge");
+    require(migrated.at("path").as_string().find("GlintBridge.exe") != std::string::npos, "migration targets installed bridge");
+    const auto timestamp = std::filesystem::last_write_time(registered_manifest(kChromeKey));
+    require(glint::setup::migrate_existing_hosts(error) && error.empty() &&
+        std::filesystem::last_write_time(registered_manifest(kChromeKey)) == timestamp, "current registration migration does not rewrite manifest");
+
+    require(glint::setup::register_bundled_host(true, error), "prepare bundled Edge registration");
+    manifest = load_manifest(kEdgeKey);
+    manifest["path"] = glint::wide_to_utf8(current_executable());
+    replace_manifest(kEdgeKey, manifest);
+    require(glint::setup::migrate_existing_hosts(error), "migrate bundled registration");
+    require(load_manifest(kEdgeKey).at("allowed_origins").dump() == manifest.at("allowed_origins").dump(),
+        "migration retains both known bundled origins exactly");
+
+    manifest = load_manifest(kChromeKey);
+    manifest["path"] = glint::wide_to_utf8(current_executable());
+    manifest["allowed_origins"] = glint::Json::Array{"chrome-extension://*/"};
+    replace_manifest(kChromeKey, manifest);
+    const auto invalid = load_manifest(kChromeKey).dump();
+    require(glint::setup::migrate_existing_hosts(error) && error.empty(), "invalid registrations are left for explicit setup repair");
+    require(load_manifest(kChromeKey).dump() == invalid, "migration never broadens or repairs malformed origins implicitly");
+}
+
 void unregister_is_idempotent() {
     Sandbox sandbox;
     std::wstring error;
     require(glint::setup::register_hosts(kChromeId, kEdgeId, error) == 0, "prepare both registrations for removal");
     const auto chrome_path = registered_manifest(kChromeKey);
     const auto edge_path = registered_manifest(kEdgeKey);
+    const std::filesystem::path bridge(glint::utf8_to_wide(load_manifest(kChromeKey).at("path").as_string()));
     require(glint::run_register(true, L"", L"") == 0, "unregister both browsers");
     require(glint::run_register(true, L"", L"") == 0, "repeated unregister succeeds");
     const auto state = glint::setup::read_registration();
     require(state.chrome_id.empty() && state.edge_id.empty() && !state.chrome_current && !state.edge_current,
             "unregister clears both registrations");
     require(!std::filesystem::exists(chrome_path) && !std::filesystem::exists(edge_path), "unregister removes generated manifests");
+    require(std::filesystem::is_regular_file(bridge), "unregister leaves a potentially running browser bridge executable intact");
 }
 
 void onboarding_state() {
@@ -282,8 +380,10 @@ int main() {
         validation_and_no_partial_update();
         independent_browser_registration();
         bundled_registration_only_changes_selected_browser();
+        bundled_manifest_reader_restricts_multiple_origins();
         bundled_registration_reports_write_failure();
         stale_and_invalid_manifests();
+        migration_preserves_origins_without_configuring_other_browsers();
         unregister_is_idempotent();
         onboarding_state();
         std::cout << "registration tests passed\n";

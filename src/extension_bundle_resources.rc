@@ -5,3 +5,7 @@
 103 RCDATA "..\\extension\\background-core.js"
 104 RCDATA "..\\extension\\options.html"
 105 RCDATA "..\\extension\\options.js"
+106 RCDATA "..\\extension\\icon-16.png"
+107 RCDATA "..\\extension\\icon-32.png"
+108 RCDATA "..\\extension\\icon-48.png"
+109 RCDATA "..\\extension\\icon-128.png"

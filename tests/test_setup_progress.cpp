@@ -76,15 +76,20 @@ static void test_selected_browser_and_multiple_connections() {
     require(index.apply(7, hello("Chrome")), "Pending Chrome hello must be accepted");
     require(index.apply(8, hello("Edge")), "Pending Edge hello must be accepted");
 
-    expect_summary(index, false, 2, 3,
-                   "Chrome must count each synchronized connection with an exact case-insensitive browser match");
+    expect_summary(index, false, 1, 2,
+                   "Chrome must count each profile once using its newest synchronized transport");
     expect_summary(index, true, 1, 3,
                    "Edge must exclude Chrome, similar names, and unsynchronized Edge connections");
 
     require(index.apply(1, hello("Chrome", "Shared")), "A repeated hello must be accepted");
-    expect_summary(index, false, 1, 2, "A repeated hello must require a new snapshot");
+    expect_summary(index, false, 1, 2, "A repeated hello must preserve readiness from the profile's other synchronized transport");
     require(index.apply(1, snapshot()), "Empty Chrome snapshot must be accepted");
-    expect_summary(index, false, 2, 2, "An empty Chrome snapshot must restore profile readiness");
+    expect_summary(index, false, 1, 2, "An older empty snapshot must not replace the newest synchronized transport");
+    require(index.disconnect(2), "The newest Chrome transport must disconnect");
+    expect_summary(index, false, 1, 0, "The remaining synchronized transport must preserve readiness with its empty snapshot");
+    require(index.apply(9, hello("Chrome", "Work")), "A separate Chrome profile hello must be accepted");
+    require(index.apply(9, snapshot({tab(1), tab(2)})), "A separate Chrome profile snapshot must be accepted");
+    expect_summary(index, false, 2, 2, "Distinct Chrome profiles must count independently");
 }
 
 static void test_tab_totals_follow_index_updates() {

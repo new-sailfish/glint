@@ -3,6 +3,7 @@
 #include <sddl.h>
 #include <userenv.h>
 
+#include <algorithm>
 #include <vector>
 
 #pragma comment(lib, "advapi32.lib")
@@ -46,6 +47,73 @@ bool write_all(HANDLE handle, const void* data, std::size_t size) {
 
 bool read_some(HANDLE handle, void* data, std::size_t size, DWORD& count) {
     return ReadFile(handle, data, static_cast<DWORD>(size), &count, nullptr) != FALSE;
+}
+
+namespace {
+bool pipe_io(HANDLE handle, void* data, DWORD size, DWORD& count, bool writing, HANDLE stop_event,
+             DWORD timeout_ms = INFINITE) {
+    count = 0;
+    if (stop_event && WaitForSingleObject(stop_event, 0) == WAIT_OBJECT_0) {
+        SetLastError(ERROR_OPERATION_ABORTED);
+        return false;
+    }
+    OVERLAPPED operation{};
+    operation.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!operation.hEvent) return false;
+    BOOL success = writing ? WriteFile(handle, data, size, &count, &operation)
+                           : ReadFile(handle, data, size, &count, &operation);
+    DWORD error = success ? ERROR_SUCCESS : GetLastError();
+    if (!success && error == ERROR_IO_PENDING) {
+        DWORD cancelled_error = ERROR_SUCCESS;
+        if (stop_event) {
+            const HANDLE events[] = {operation.hEvent, stop_event};
+            const DWORD wait = WaitForMultipleObjects(2, events, FALSE, timeout_ms);
+            if (wait != WAIT_OBJECT_0) {
+                const DWORD wait_error = wait == WAIT_FAILED ? GetLastError() : ERROR_OPERATION_ABORTED;
+                CancelIoEx(handle, &operation);
+                cancelled_error = wait == WAIT_TIMEOUT ? ERROR_TIMEOUT : wait_error;
+            }
+        } else {
+            const DWORD wait = WaitForSingleObject(operation.hEvent, timeout_ms);
+            if (wait != WAIT_OBJECT_0) {
+                const DWORD wait_error = wait == WAIT_FAILED ? GetLastError() : ERROR_TIMEOUT;
+                CancelIoEx(handle, &operation);
+                cancelled_error = wait_error;
+            }
+        }
+        // Always drain completion before destroying OVERLAPPED or its event.
+        success = GetOverlappedResult(handle, &operation, &count, TRUE);
+        error = success ? ERROR_SUCCESS : GetLastError();
+        if (cancelled_error != ERROR_SUCCESS) { success = FALSE; error = cancelled_error; }
+    }
+    CloseHandle(operation.hEvent);
+    SetLastError(error);
+    return success != FALSE;
+}
+} // namespace
+
+bool read_pipe_some(HANDLE handle, void* data, std::size_t size, DWORD& count, HANDLE stop_event) {
+    const DWORD chunk = static_cast<DWORD>((std::min)(size, static_cast<std::size_t>(1u << 20)));
+    return pipe_io(handle, data, chunk, count, false, stop_event);
+}
+
+bool write_pipe_all(HANDLE handle, const void* data, std::size_t size, HANDLE stop_event, DWORD timeout_ms) {
+    const auto* cursor = static_cast<const std::byte*>(data);
+    const ULONGLONG started = GetTickCount64();
+    while (size != 0) {
+        DWORD remaining = INFINITE;
+        if (timeout_ms != INFINITE) {
+            const ULONGLONG elapsed = GetTickCount64() - started;
+            if (elapsed >= timeout_ms) { SetLastError(ERROR_TIMEOUT); return false; }
+            remaining = timeout_ms - static_cast<DWORD>(elapsed);
+        }
+        const DWORD chunk = static_cast<DWORD>((std::min)(size, static_cast<std::size_t>(1u << 20)));
+        DWORD written = 0;
+        if (!pipe_io(handle, const_cast<std::byte*>(cursor), chunk, written, true, stop_event, remaining) || written == 0) return false;
+        cursor += written;
+        size -= written;
+    }
+    return true;
 }
 
 std::wstring last_error_text(DWORD error) {

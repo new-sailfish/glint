@@ -1,3 +1,4 @@
 #include <windows.h>
 1 RT_MANIFEST "..\\app.manifest"
+201 ICON "..\\assets\\glint.ico"
 #include "extension_bundle_resources.rc"

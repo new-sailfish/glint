@@ -1,11 +1,48 @@
+# Generated builds and release packages (publish through GitHub Releases).
 /build/
 /dist/
-/.vs/
-*.user
-*.suo
-*.obj
-*.pdb
-*.ilk
+/out/
+cmake-build-*/
 *.exe
 *.dll
 *.zip
+*.obj
+*.pdb
+*.ilk
+*.lib
+*.exp
+
+# Local IDE, dependency, and interpreter state.
+/.vs/
+CMakeUserPresets.json
+*.user
+*.suo
+node_modules/
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+
+# Private agent context, brainstorming previews, and browser snapshots.
+/.local/
+/.codex/
+/.claude/
+/.superpowers/
+/.playwright-mcp/
+/.impeccable.md
+/docs/superpowers/
+/docs/validation-*.md
+/docs/private/
+/docs/local/
+
+# Local environment files and signing secrets; keep public examples visible.
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+*.pem
+*.key
+*.pfx
+*.p12
+*.keystore

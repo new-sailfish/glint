@@ -20,15 +20,21 @@ if(WIN32)
   add_executable(glint WIN32
     src/main.cpp
     src/win_app.cpp
+    src/hotkey.cpp
+    src/hotkey_window.cpp
     src/win_common.cpp
+    src/pipe_server.cpp
     src/native_host.cpp
     src/registration.cpp
+    src/extension_identity.cpp
     src/setup_window.cpp
     src/extension_bundle.cpp
     src/browser_launch.cpp
+    src/foreground_permission.cpp
+    src/bridge_installation.cpp
     src/win_resources.rc
   )
-  target_link_libraries(glint PRIVATE glint_core user32 shell32 comctl32 advapi32 ole32)
+  target_link_libraries(glint PRIVATE glint_core user32 shell32 comctl32 advapi32 ole32 bcrypt)
   target_include_directories(glint PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
   target_compile_features(glint PRIVATE cxx_std_20)
   if(MSVC)
@@ -59,16 +65,109 @@ if(GLINT_BUILD_TESTS)
   endif()
   add_test(NAME glint_setup_progress COMMAND glint_setup_progress_tests)
 
+  add_executable(glint_connection_overview_tests tests/test_connection_overview.cpp)
+  target_include_directories(glint_connection_overview_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(glint_connection_overview_tests PRIVATE glint_core)
+  target_compile_features(glint_connection_overview_tests PRIVATE cxx_std_20)
+  if(MSVC)
+    target_compile_options(glint_connection_overview_tests PRIVATE /W4 /permissive- /EHsc /utf-8 /UNDEBUG)
+    set_property(TARGET glint_connection_overview_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  endif()
+  add_test(NAME glint_connection_overview COMMAND glint_connection_overview_tests)
+
   if(WIN32)
-    add_executable(glint_registration_tests tests/test_registration.cpp src/registration.cpp src/win_common.cpp)
+    add_executable(glint_search_navigation_tests tests/test_search_navigation.cpp)
+    target_include_directories(glint_search_navigation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(glint_search_navigation_tests PRIVATE user32 comctl32)
+    target_compile_features(glint_search_navigation_tests PRIVATE cxx_std_20)
+    target_compile_definitions(glint_search_navigation_tests PRIVATE UNICODE _UNICODE)
+    if(MSVC)
+      target_compile_options(glint_search_navigation_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+      set_property(TARGET glint_search_navigation_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_search_navigation COMMAND glint_search_navigation_tests)
+
+    add_executable(glint_hotkey_tests tests/test_hotkey.cpp src/hotkey.cpp)
+    target_include_directories(glint_hotkey_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(glint_hotkey_tests PRIVATE user32 advapi32)
+    target_compile_features(glint_hotkey_tests PRIVATE cxx_std_20)
+    target_compile_definitions(glint_hotkey_tests PRIVATE UNICODE _UNICODE)
+    if(MSVC)
+      target_compile_options(glint_hotkey_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+      set_property(TARGET glint_hotkey_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_hotkey COMMAND glint_hotkey_tests)
+
+    add_executable(glint_hotkey_window_tests tests/test_hotkey_window.cpp src/hotkey_window.cpp src/hotkey.cpp)
+    target_include_directories(glint_hotkey_window_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(glint_hotkey_window_tests PRIVATE user32 gdi32 comctl32 advapi32)
+    target_compile_features(glint_hotkey_window_tests PRIVATE cxx_std_20)
+    target_compile_definitions(glint_hotkey_window_tests PRIVATE UNICODE _UNICODE)
+    if(MSVC)
+      target_compile_options(glint_hotkey_window_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+      set_property(TARGET glint_hotkey_window_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_hotkey_window COMMAND glint_hotkey_window_tests)
+
+    add_executable(glint_pipe_server_tests tests/test_pipe_server.cpp src/pipe_server.cpp src/win_common.cpp src/foreground_permission.cpp src/bridge_installation.cpp)
+    target_include_directories(glint_pipe_server_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(glint_pipe_server_tests PRIVATE glint_core advapi32 user32 bcrypt)
+    target_compile_features(glint_pipe_server_tests PRIVATE cxx_std_20)
+    if(MSVC)
+      target_compile_options(glint_pipe_server_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+      set_property(TARGET glint_pipe_server_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_pipe_server COMMAND glint_pipe_server_tests)
+
+    add_executable(glint_foreground_permission_tests tests/test_foreground_permission.cpp src/foreground_permission.cpp src/bridge_installation.cpp src/win_common.cpp)
+    target_include_directories(glint_foreground_permission_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(glint_foreground_permission_tests PRIVATE glint_core user32 advapi32 bcrypt)
+    target_compile_features(glint_foreground_permission_tests PRIVATE cxx_std_20)
+    if(MSVC)
+      target_compile_options(glint_foreground_permission_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+      set_property(TARGET glint_foreground_permission_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_foreground_permission COMMAND glint_foreground_permission_tests)
+
+    add_executable(glint_native_host_tests tests/test_native_host.cpp src/native_host.cpp src/win_common.cpp)
+    target_include_directories(glint_native_host_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(glint_native_host_tests PRIVATE glint_core advapi32)
+    target_compile_features(glint_native_host_tests PRIVATE cxx_std_20)
+    if(MSVC)
+      target_compile_options(glint_native_host_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+      set_property(TARGET glint_native_host_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_native_host COMMAND glint_native_host_tests)
+
+    add_executable(glint_registration_tests tests/test_registration.cpp src/registration.cpp src/win_common.cpp src/extension_identity.cpp src/bridge_installation.cpp)
     target_include_directories(glint_registration_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(glint_registration_tests PRIVATE glint_core advapi32)
+    target_link_libraries(glint_registration_tests PRIVATE glint_core advapi32 bcrypt)
     target_compile_features(glint_registration_tests PRIVATE cxx_std_20)
     if(MSVC)
       target_compile_options(glint_registration_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
       set_property(TARGET glint_registration_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()
     add_test(NAME glint_registration COMMAND glint_registration_tests)
+
+    add_executable(glint_bridge_installation_tests tests/test_bridge_installation.cpp src/bridge_installation.cpp src/win_common.cpp)
+    target_include_directories(glint_bridge_installation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(glint_bridge_installation_tests PRIVATE glint_core advapi32 bcrypt)
+    target_compile_features(glint_bridge_installation_tests PRIVATE cxx_std_20)
+    if(MSVC)
+      target_compile_options(glint_bridge_installation_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+      set_property(TARGET glint_bridge_installation_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_bridge_installation COMMAND glint_bridge_installation_tests)
+
+    add_executable(glint_extension_identity_tests tests/test_extension_identity.cpp src/extension_identity.cpp)
+    target_include_directories(glint_extension_identity_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(glint_extension_identity_tests PRIVATE bcrypt)
+    target_compile_features(glint_extension_identity_tests PRIVATE cxx_std_20)
+    if(MSVC)
+      target_compile_options(glint_extension_identity_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+      set_property(TARGET glint_extension_identity_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_extension_identity COMMAND glint_extension_identity_tests)
 
     add_executable(glint_extension_bundle_tests
       tests/test_extension_bundle.cpp
@@ -99,12 +198,14 @@ if(GLINT_BUILD_TESTS)
       src/setup_window.cpp
       src/browser_launch.cpp
       src/registration.cpp
+      src/bridge_installation.cpp
+      src/extension_identity.cpp
       src/win_common.cpp
       src/extension_bundle.cpp
       src/extension_bundle_resources.rc
     )
     target_include_directories(glint_setup_window_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(glint_setup_window_tests PRIVATE glint_core user32 gdi32 shell32 comctl32 advapi32 ole32)
+    target_link_libraries(glint_setup_window_tests PRIVATE glint_core user32 gdi32 shell32 comctl32 advapi32 ole32 bcrypt)
     target_compile_features(glint_setup_window_tests PRIVATE cxx_std_20)
     target_compile_definitions(glint_setup_window_tests PRIVATE UNICODE _UNICODE)
     if(MSVC)
@@ -112,6 +213,19 @@ if(GLINT_BUILD_TESTS)
       set_property(TARGET glint_setup_window_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()
     add_test(NAME glint_setup_window COMMAND glint_setup_window_tests)
+  endif()
+endif()
+
+# Keep a hung native test from consuming the entire CI job. Individual
+# integration tests below retain their shorter timeout.
+if(GLINT_BUILD_TESTS)
+  get_property(GLINT_REGISTERED_TESTS DIRECTORY PROPERTY TESTS)
+  if(GLINT_REGISTERED_TESTS)
+    set_tests_properties(${GLINT_REGISTERED_TESTS} PROPERTIES TIMEOUT 120)
+    if(WIN32)
+      set_tests_properties(glint_pipe_server PROPERTIES TIMEOUT 20)
+      set_tests_properties(glint_native_host PROPERTIES TIMEOUT 45)
+    endif()
   endif()
 endif()
 

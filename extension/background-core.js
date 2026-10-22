@@ -56,9 +56,13 @@
       this.sessionId = opts.sessionId || makeProfileId();
       this.schedule = opts.schedule || ((fn, ms) => setTimeout(fn, ms));
       this.clearSchedule = opts.clearSchedule || (id => clearTimeout(id));
+      this.wait = opts.wait || (ms => new Promise(resolve => setTimeout(resolve, ms)));
       this.logger = opts.logger || (() => {});
       this.port = null;
       this.connected = false;
+      this.desktopConnected = false;
+      this.desktopGeneration = null;
+      this.connectionEpoch = 0;
       this.connecting = false;
       this.listenersAttached = false;
       this.syncing = false;
@@ -81,10 +85,18 @@
       // A detached tab can still exist in another window. Reading it avoids a transient false removal.
       events.onDetached && events.onDetached.addListener(tabId => this.queueEvent({kind: 'upsert', tabId}));
       events.onRemoved && events.onRemoved.addListener(tabId => this.queueEvent({kind: 'remove', tabId}));
+      // Prerendering can replace a tab ID without firing onRemoved for the old ID.
+      events.onReplaced && events.onReplaced.addListener((addedTabId, removedTabId) => {
+        this.queueEvent({kind: 'remove', tabId: removedTabId});
+        this.queueEvent({kind: 'upsert', tabId: addedTabId});
+      });
       this.listenersAttached = true;
     }
 
     queueEvent(event) {
+      // A complete snapshot follows every desktop reconnect. Do not buffer
+      // offline metadata in the native port for a future desktop process.
+      if (!this.desktopConnected) return;
       if (this.syncing) {
         this.pendingEvents.push(event);
         return;
@@ -93,13 +105,16 @@
     }
 
     enqueueEvent(event) {
+      const epoch = this.connectionEpoch;
       this.eventChain = this.eventChain
-        .then(() => this.processEvent(event))
+        .then(() => {
+          if (epoch === this.connectionEpoch && this.desktopConnected) return this.processEvent(event, epoch);
+        })
         .catch(error => this.logger('tab event processing failed', error));
       return this.eventChain;
     }
 
-    async processEvent(event) {
+    async processEvent(event, epoch = this.connectionEpoch) {
       if (!event || event.tabId === undefined || event.tabId === null) return;
       if (event.kind === 'remove') {
         this.index.delete(Number(event.tabId));
@@ -108,40 +123,45 @@
       }
       try {
         const tab = await this.api.tabs.get(Number(event.tabId));
+        if (epoch !== this.connectionEpoch || !this.desktopConnected) return;
         const normalized = normalizeTab(tab);
         this.index.set(normalized.tabId, normalized);
         this.send({type: 'upsert', tab: normalized});
       } catch (_) {
+        if (epoch !== this.connectionEpoch || !this.desktopConnected) return;
         this.index.delete(Number(event.tabId));
         this.send({type: 'remove', tabId: Number(event.tabId)});
       }
     }
 
     syncSnapshot() {
-      const run = this.syncQueue.then(() => this._syncSnapshot());
+      const epoch = this.connectionEpoch;
+      const run = this.syncQueue.then(() => this._syncSnapshot(epoch));
       this.syncQueue = run.catch(() => {});
       return run;
     }
 
-    async _syncSnapshot() {
-      if (!this.api || !this.api.tabs || !this.connected) return;
+    async _syncSnapshot(epoch) {
+      if (!this.api || !this.api.tabs || !this.desktopConnected || epoch !== this.connectionEpoch) return;
       this.syncing = true;
+      this.syncEpoch = epoch;
       this.pendingEvents = [];
-      let tabs;
       try {
-        tabs = await this.api.tabs.query({});
-      } catch (error) {
-        this.syncing = false;
-        throw error;
+        const tabs = await this.api.tabs.query({});
+        if (!this.desktopConnected || epoch !== this.connectionEpoch) return;
+        const normalized = tabs.map(normalizeTab);
+        this.index = new Map(normalized.map(tab => [tab.tabId, tab]));
+        this.send({type: 'snapshot', tabs: normalized}, epoch);
+      } finally {
+        // A failed manual refresh must not discard closes received during query.
+        if (this.syncEpoch === epoch) {
+          this.syncing = false;
+          const pending = this.pendingEvents;
+          this.pendingEvents = [];
+          for (const event of pending) this.enqueueEvent(event);
+          await this.eventChain;
+        }
       }
-      const normalized = tabs.map(normalizeTab);
-      this.index = new Map(normalized.map(tab => [tab.tabId, tab]));
-      this.send({type: 'snapshot', tabs: normalized});
-      this.syncing = false;
-      const pending = this.pendingEvents;
-      this.pendingEvents = [];
-      for (const event of pending) this.enqueueEvent(event);
-      await this.eventChain;
     }
 
     sendHello() {
@@ -150,10 +170,11 @@
       return this.send(hello);
     }
 
-    send(message) {
-      if (!this.connected || !this.port || typeof this.port.postMessage !== 'function') return false;
+    send(message, epoch = this.connectionEpoch) {
+      if (!this.connected || !this.desktopConnected || epoch !== this.connectionEpoch ||
+          !this.port || typeof this.port.postMessage !== 'function') return false;
       try {
-        this.port.postMessage({...message, version: VERSION});
+        this.port.postMessage({...message, version: VERSION, desktopGeneration: this.desktopGeneration});
         return true;
       } catch (error) {
         this.logger('native message send failed', error);
@@ -169,18 +190,22 @@
         const port = this.api.runtime.connectNative(this.hostName);
         this.port = port;
         this.connected = true;
-        port.onMessage && port.onMessage.addListener(message => { void this.handleMessage(message); });
+        this.setDesktopState(false);
+        port.onMessage && port.onMessage.addListener(message => {
+          if (this.port !== port) return;
+          void this.handleMessage(message).catch(error => {
+            this.lastError = String(error && error.message || error);
+            this.logger('native message handling failed', error);
+          });
+        });
         port.onDisconnect && port.onDisconnect.addListener(() => {
           // Read lastError in this callback so Chrome does not report it as unhandled.
           const error = this.api.runtime.lastError;
+          if (this.port !== port) return;
           this.lastError = error && error.message ? error.message : 'Native messaging connection closed.';
           this.handleDisconnect(port);
         });
         this.lastError = '';
-        this.sendHello();
-
-        await this.syncSnapshot();
-        this.reconnectAttempt = 0;
       } catch (error) {
         this.lastError = String(error && error.message || error);
         this.logger('native connection failed', error);
@@ -191,7 +216,7 @@
     }
 
     async retryConnect() {
-      if (this.connected) return this.syncSnapshot();
+      if (this.connected) return this.desktopConnected ? this.syncSnapshot() : undefined;
       if (this.reconnectTimer !== null) {
         this.clearSchedule(this.reconnectTimer);
         this.reconnectTimer = null;
@@ -201,10 +226,10 @@
     }
 
     handleDisconnect(port) {
-      if (port && this.port && port !== this.port) return;
+      if (port && port !== this.port) return;
       this.connected = false;
       this.port = null;
-      this.syncing = false;
+      this.setDesktopState(false);
       if (this.reconnectTimer !== null) return;
       const attempt = this.reconnectAttempt;
       const delay = Math.min(MAX_RECONNECT_MS, MIN_RECONNECT_MS * (2 ** attempt));
@@ -215,24 +240,95 @@
       }, delay);
     }
 
+    setDesktopState(connected, generation = null) {
+      this.connectionEpoch++;
+      this.desktopConnected = connected;
+      this.desktopGeneration = generation;
+      this.syncing = false;
+      this.syncEpoch = null;
+      this.pendingEvents = [];
+    }
+
     async handleMessage(message) {
       if (!message || (message.version !== undefined && message.version !== VERSION)) return;
+      if (message.type === 'desktop_status') {
+        if (message.version !== VERSION) return;
+        if (message.state === 'waiting') {
+          this.setDesktopState(false);
+        } else if (message.state === 'connected' && Number.isSafeInteger(message.generation) && message.generation > 0) {
+          this.setDesktopState(true, message.generation);
+          this.reconnectAttempt = 0;
+          this.lastError = '';
+          this.sendHello();
+          const epoch = this.connectionEpoch;
+          try {
+            await this.syncSnapshot();
+          } catch (error) {
+            if (epoch !== this.connectionEpoch) return;
+            this.lastError = String(error && error.message || error);
+            this.logger('initial desktop snapshot failed', error);
+            const port = this.port;
+            this.handleDisconnect(port);
+            try { port && port.disconnect(); } catch (_) {}
+          }
+        }
+        return;
+      }
       if (message.type !== 'activate') return;
+      if (!this.desktopConnected) return;
+      const epoch = this.connectionEpoch;
       const requestId = message.requestId;
       try {
         const tabId = Number(message.tabId);
-        const windowId = Number(message.windowId);
-        if (!Number.isFinite(tabId) || !Number.isFinite(windowId)) throw new Error('invalid tab or window id');
+        if (!Number.isSafeInteger(tabId) || tabId < 0) throw new Error('invalid tab id');
+        // The tab may have moved since the desktop's last update. The browser's
+        // returned tab is authoritative; focusing the cached window can raise
+        // a different window while leaving the requested tab behind it.
+        const activated = await this.api.tabs.update(tabId, {active: true});
+        if (epoch !== this.connectionEpoch || !this.desktopConnected) return;
+        if (!activated || activated.active !== true) throw new Error('标签页未能激活，请重试。');
+        const windowId = Number(activated.windowId);
+        if (!Number.isSafeInteger(windowId) || windowId < 0) throw new Error('invalid current window id');
         const win = await this.api.windows.get(windowId);
+        if (epoch !== this.connectionEpoch || !this.desktopConnected) return;
         if (win && win.state === 'minimized') {
           await this.api.windows.update(windowId, {state: 'normal', focused: true});
         } else {
           await this.api.windows.update(windowId, {focused: true});
         }
-        await this.api.tabs.update(tabId, {active: true});
-        this.send({type: 'activate_result', requestId, ok: true});
+        if (epoch !== this.connectionEpoch || !this.desktopConnected) return;
+        // A competing window can cover the target just after the first focus
+        // notification. Require 150 ms of stable focus, with bounded retries
+        // when a positive sample is followed by a lost foreground window.
+        let focused = false;
+        let focusedSamples = 0;
+        let focusRetries = 0;
+        for (let attempt = 0; attempt < 12; ++attempt) {
+          if (epoch !== this.connectionEpoch || !this.desktopConnected) return;
+          const current = await this.api.windows.get(windowId);
+          if (epoch !== this.connectionEpoch || !this.desktopConnected) return;
+          if (current && current.focused === true) {
+            if (++focusedSamples >= 4) { focused = true; break; }
+          } else {
+            if (focusedSamples > 0 && focusRetries < 2) {
+              focusRetries++;
+              await this.api.windows.update(windowId, {focused: true});
+              if (epoch !== this.connectionEpoch || !this.desktopConnected) return;
+            }
+            focusedSamples = 0;
+          }
+          if (attempt < 11) {
+            await this.wait(50);
+            if (epoch !== this.connectionEpoch || !this.desktopConnected) return;
+          }
+        }
+        if (!focused) throw new Error('标签页已切换，但 Windows 未将目标窗口切到前台。请重试，或从任务栏打开该窗口。');
+        const currentTab = await this.api.tabs.get(tabId);
+        if (epoch !== this.connectionEpoch || !this.desktopConnected) return;
+        if (!currentTab.active || currentTab.windowId !== windowId) throw new Error('标签页状态已变化，请重新搜索后重试。');
+        this.send({type: 'activate_result', requestId, ok: true}, epoch);
       } catch (error) {
-        this.send({type: 'activate_result', requestId, ok: false, error: String(error && error.message || error)});
+        this.send({type: 'activate_result', requestId, ok: false, error: String(error && error.message || error)}, epoch);
       }
     }
   }

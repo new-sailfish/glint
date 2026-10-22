@@ -3,9 +3,37 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const extensionDirectory = path.resolve(__dirname, '..');
+const manifest = JSON.parse(fs.readFileSync(path.join(extensionDirectory, 'manifest.json'), 'utf8'));
+
+test('every manifest runtime path names an existing bundled file', () => {
+  const files = new Set([manifest.background.service_worker, manifest.options_page,
+    manifest.action.default_popup, ...Object.values(manifest.icons), ...Object.values(manifest.action.default_icon)]);
+  for (const filename of files) {
+    assert.equal(typeof filename, 'string');
+    const file = path.resolve(extensionDirectory, filename);
+    assert.ok(file.startsWith(extensionDirectory + path.sep), `${filename} must stay inside the extension bundle`);
+    assert.ok(fs.statSync(file).isFile(), `${filename} must be packaged with the extension`);
+  }
+});
+
+test('extension and toolbar icons are PNGs matching their declared sizes', () => {
+  assert.deepEqual(Object.keys(manifest.icons).map(Number).sort((a, b) => a - b), [16, 32, 48, 128]);
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  for (const icons of [manifest.icons, manifest.action.default_icon]) {
+    for (const [size, filename] of Object.entries(icons)) {
+      const png = fs.readFileSync(path.join(extensionDirectory, filename));
+      assert.ok(png.length >= 33, `${filename} must contain a PNG header`);
+      assert.deepEqual(png.subarray(0, 8), signature, `${filename} must be a PNG`);
+      assert.equal(png.readUInt32BE(8), 13, `${filename} must have a complete IHDR chunk`);
+      assert.equal(png.toString('ascii', 12, 16), 'IHDR');
+      assert.equal(png.readUInt32BE(16), Number(size), `${filename} width must match the manifest`);
+      assert.equal(png.readUInt32BE(20), Number(size), `${filename} height must match the manifest`);
+    }
+  }
+});
 
 test('bundled extension public key fixes the same ID as the native host', () => {
-  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../manifest.json'), 'utf8'));
   assert.equal(typeof manifest.key, 'string', 'manifest must contain the bundled public key');
   const publicDer = Buffer.from(manifest.key, 'base64');
   assert.equal(publicDer.toString('base64'), manifest.key, 'key uses canonical base64');

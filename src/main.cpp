@@ -9,6 +9,16 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     int count = 0;
     LPWSTR* arguments = CommandLineToArgvW(GetCommandLineW(), &count);
     bool native = false;
+    // The installed browser-owned copy has a distinct process name and can
+    // never become a second desktop instance when launched without pipes.
+    std::wstring image(32768, L'\0');
+    const DWORD image_length = GetModuleFileNameW(nullptr, image.data(), static_cast<DWORD>(image.size()));
+    if (image_length && image_length < image.size()) {
+        image.resize(image_length);
+        const auto separator = image.find_last_of(L"\\/");
+        const auto name = image.substr(separator == std::wstring::npos ? 0 : separator + 1);
+        native = CompareStringOrdinal(name.c_str(), -1, L"GlintBridge.exe", -1, TRUE) == CSTR_EQUAL;
+    }
     bool register_host = false;
     bool unregister_host = false;
     bool open_setup = false;

@@ -22,22 +22,26 @@ private:
     HWND notice_ = nullptr, primary_ = nullptr, back_ = nullptr, browser_status_ = nullptr;
     HWND address_ = nullptr, developer_hint_ = nullptr, load_hint_ = nullptr;
     HWND connection_ = nullptr, connection_detail_ = nullptr, manual_id_ = nullptr;
+    HWND repair_id_ = nullptr, repair_result_ = nullptr;
+    HWND illustration_ = nullptr;
     std::function<void()> show_search_;
     std::filesystem::path extension_directory_;
     std::vector<Control> controls_;
     std::vector<ConnectionInfo> connections_;
     browser_launch::Browser browser_ = browser_launch::Browser::Chrome;
     std::optional<browser_launch::Browser> manual_browser_;
+    std::optional<browser_launch::Browser> repair_browser_;
     HFONT fonts_[3]{};
     UINT dpi_ = 96;
     int scroll_ = 0, page_ = 0;
-    bool manual_flow_ = false;
+    bool manual_flow_ = false, dismissing_ = false;
     std::wstring hotkey_ = L"Ctrl+Shift+Space";
     static LRESULT CALLBACK window_proc(HWND, UINT, WPARAM, LPARAM);
     bool create();
     HWND add(const wchar_t* type, const wchar_t* text, DWORD style, int id,
              int x, int y, int width, int height, int page, int font = 0, bool stretch = false);
     int px(int value) const;
+    void paint(HDC dc) const;
     void set_fonts();
     void layout();
     void scroll_to(int position);
@@ -47,9 +51,11 @@ private:
     void set_page(int page);
     bool prepare();
     void register_manual();
+    void register_repair();
     bool copy_text(const std::wstring& text, const wchar_t* success);
     void open_extensions();
     void update_status();
     void update_browser_status();
+    HWND page_focus() const;
 };
 } // namespace glint

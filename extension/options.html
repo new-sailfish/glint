@@ -3,90 +3,137 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>连接浏览器 · Glint</title>
+  <title>连接状态 · Glint</title>
   <style>
-    :root { color-scheme: light dark; font: 14px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif;
-      --bg: #f7f8fa; --ink: #202633; --muted: #546173; --line: #d8dee8; --accent: #245ac1; --field: #fff; }
-    @media (prefers-color-scheme: dark) { :root { --bg: #1a1e25; --ink: #e8edf5; --muted: #abb7c8;
-      --line: #434d5d; --accent: #9cbbff; --field: #232a35; } }
+    :root { color-scheme: light dark; font: 13px/1.65 "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      --bg: #f5f8fd; --surface: #fff; --ink: #223043; --muted: #53657b; --line: #d7e1ec;
+      --accent: #2c61bd; --accent-hover: #204e9d; --wash: #eaf1ff; --field: #f9fbff;
+      --success: #237c56; --waiting: #95641a; --error: #b44742; --on-accent: #fff; }
+    @media (prefers-color-scheme: dark) { :root {
+      --bg: #171e29; --surface: #202a38; --ink: #e7eef8; --muted: #b0bed1; --line: #3b4b61;
+      --accent: #a9c7ff; --accent-hover: #c1d6ff; --wash: #283b58; --field: #1b2533;
+      --success: #82d5ac; --waiting: #e6bf76; --error: #ffaaa3; --on-accent: #142c52; } }
     * { box-sizing: border-box; }
-    body { max-width: 740px; margin: 0 auto; padding: 38px 24px 48px; background: var(--bg); color: var(--ink); }
-    .brand { color: var(--accent); font-weight: 600; }
-    h1 { font-size: 28px; line-height: 1.3; margin: 9px 0 12px; }
-    h2 { font-size: 17px; margin: 0 0 6px; }
-    p { margin: 0 0 12px; color: var(--muted); }
-    ol { list-style: none; margin: 30px 0; padding: 0; counter-reset: step; }
-    li { counter-increment: step; display: grid; grid-template-columns: 28px 1fr; gap: 14px; margin-top: 23px; }
-    li::before { content: counter(step); display: grid; place-items: center; align-self: start; width: 27px; height: 27px;
-      border: 1px solid var(--line); border-radius: 50%; font-weight: 600; color: var(--accent); }
-    .row { display: flex; gap: 8px; align-items: center; }
-    input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--field); color: var(--ink); font: inherit; min-width: 0; }
-    #extension-id { font: 13px/1.6 Consolas, monospace; }
-    button { flex: none; padding: 7px 13px; border: 1px solid var(--line); border-radius: 4px; background: var(--field); color: var(--ink); font: inherit; cursor: pointer; }
-    button:hover { border-color: var(--accent); }
+    body { width: 400px; max-width: 100%; max-height: 580px; overflow-y: auto;
+      margin: 0 auto; padding: 22px 20px 18px; background: var(--bg); color: var(--ink); }
+    main { min-width: 0; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .brand img { flex: none; display: block; width: 36px; height: 36px; }
+    h1 { margin: 0; font-size: 23px; line-height: 1.15; font-weight: 650; letter-spacing: -.5px; }
+    .tagline { margin: 3px 0 0; font-size: 11px; line-height: 1.5; white-space: nowrap; }
+    #browser-name { flex: none; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px;
+      color: var(--muted); font-size: 11px; line-height: 1.5; }
+    p { margin: 0 0 10px; color: var(--muted); overflow-wrap: anywhere; }
+    .row { display: flex; gap: 7px; align-items: center; }
+    input { width: 100%; min-height: 34px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px;
+      background: var(--field); color: var(--ink); font: inherit; min-width: 0; }
+    input::placeholder { color: var(--muted); opacity: 1; }
+    #extension-id { font: 11px/1.8 Consolas, monospace; }
+    button { flex: none; min-height: 34px; padding: 6px 11px; border: 1px solid var(--line); border-radius: 6px;
+      background: var(--surface); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer;
+      transition: background-color 120ms ease-out, border-color 120ms ease-out; }
+    button:hover { border-color: var(--accent); background: var(--wash); }
+    button:active { background: var(--field); }
     button:disabled { cursor: wait; opacity: .65; }
-    input:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    #retry { min-height: 32px; padding: 5px 10px; border-color: var(--accent); background: var(--accent);
+      color: var(--on-accent); font-size: 12px; }
+    #retry:hover { border-color: var(--accent-hover); background: var(--accent-hover); }
+    input:focus-visible, button:focus-visible, summary:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 3px; }
     .hint { font-size: 12px; }
-    .feedback { margin-top: 6px; min-height: 1.5em; }
-    .connection { border-block: 1px solid var(--line); padding: 18px 0; margin: 18px 0 25px; }
-    #connection-status { font-weight: 600; margin-bottom: 4px; }
-    #connection-detail { overflow-wrap: anywhere; }
-    .status-dot { display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: #b27915; }
-    .status-dot.good { background: #238153; }
-    details { margin-top: 24px; }
-    summary { cursor: pointer; font-weight: 600; margin-bottom: 12px; }
-    label { display: block; font-weight: 600; margin-bottom: 5px; }
-    #profile-form { max-width: 480px; }
-    .form-actions { display: flex; gap: 12px; align-items: center; margin-top: 10px; }
-    footer { margin-top: 28px; }
-    kbd { border: 1px solid var(--line); padding: 1px 4px; border-radius: 3px; font: inherit; font-size: 12px; }
-    @media (max-width: 430px) { body { padding: 24px 16px; } h1 { font-size: 24px; } li { gap: 10px; } .row { flex-wrap: wrap; } .row input { flex-basis: 100%; } }
+    .feedback { margin: 7px 0 0; color: var(--accent); }
+    .feedback:empty { display: none; }
+    .connection { margin: 22px 0 16px; padding: 16px; border: 1px solid var(--line);
+      border-radius: 12px; background: var(--surface); }
+    .connection-heading { display: flex; justify-content: space-between; gap: 12px;
+      align-items: flex-start; margin-bottom: 9px; }
+    .connection-title { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding-top: 4px; }
+    #connection-status { font-size: 14px; line-height: 1.6; font-weight: 650; }
+    #connection-detail { margin-bottom: 16px; }
+    .status-dot { flex: none; display: inline-block; width: 8px; height: 8px; margin-top: 7px;
+      border-radius: 50%; background: var(--waiting); }
+    .status-dot.good { background: var(--success); }
+    :root[data-connection="checking"] .status-dot { background: var(--accent); }
+    :root[data-connection="error"] .status-dot { background: var(--error); }
+    .connection label { font-size: 11px; color: var(--muted); font-weight: 500; }
+    #copy-id { padding-inline: 9px; font-size: 12px; }
+    .keyboard-guide { padding: 0 2px 16px; }
+    .keyboard-guide .shortcut-label { margin: 0 0 7px; color: var(--muted); font-size: 11px; }
+    .shortcut { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-bottom: 7px; }
+    .shortcut span { margin-left: 4px; color: var(--accent); font-size: 12px; font-weight: 600; }
+    .keyboard-guide p { margin: 0; font-size: 12px; }
+    .keyboard-guide .hint { margin-top: 3px; font-size: 11px; }
+    details { border-top: 1px solid var(--line); padding: 13px 2px; }
+    summary { width: fit-content; cursor: pointer; font-size: 13px; font-weight: 600; }
+    summary::marker { color: var(--accent); font-size: 10px; }
+    details[open] summary { margin-bottom: 12px; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; }
+    .form-actions { display: flex; flex-wrap: wrap; gap: 7px 10px; align-items: center; margin-top: 9px; }
+    .form-actions button { font-size: 12px; }
+    #save-status { flex: 1 1 110px; }
+    footer { border-top: 1px solid var(--line); padding-top: 12px; }
+    footer p { margin: 0; }
+    footer .hint { font-size: 11px; }
+    kbd { display: inline-block; border: 1px solid var(--line); padding: 1px 6px; border-radius: 4px;
+      background: var(--surface); color: var(--ink); font: 600 11px/1.7 "Segoe UI", "Microsoft YaHei UI", sans-serif; }
+    @media (max-width: 350px) {
+      body { padding: 18px 14px 14px; }
+      header { gap: 7px; }
+      .brand { gap: 8px; }
+      .tagline { font-size: 10px; }
+      #browser-name { padding-inline: 6px; font-size: 10px; }
+      .connection { margin-top: 18px; padding: 13px; }
+      .connection-heading { gap: 8px; }
+      #connection-status { font-size: 13px; }
+      #retry { padding-inline: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+    @media (forced-colors: active) {
+      .status-dot { border: 1px solid CanvasText; }
+      .status-dot.good { background: Highlight; }
+      #retry { border-color: ButtonText; }
+    }
   </style>
 </head>
 <body>
   <main>
-    <div class="brand">Glint · <span id="browser-name">浏览器</span></div>
-    <h1>回到 Glint，完成连接</h1>
-    <p>扩展已加载到当前浏览器配置文件。使用内置扩展时，无需复制或填写扩展 ID。</p>
-    <ol>
-      <li><div>
-        <h2>在 Glint 中检查连接</h2>
-        <p>回到桌面端的“连接浏览器”窗口，点击<strong>我已加载扩展，检查连接</strong>。等待 Glint 收到当前浏览器的标签页。</p>
-        <p class="hint">找不到窗口时，从 Glint 系统托盘菜单打开“连接浏览器”，选择当前浏览器，按向导继续。</p>
-      </div></li>
-      <li><div>
-        <h2>连接成功后开始搜索</h2>
-        <p>在 Glint 中点击<strong>开始搜索</strong>，或按 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd> 呼出搜索框。输入标签页标题或网址，按回车切换过去。</p>
-        <p class="hint">如果你修改过热键，请使用桌面端中设置的组合键。</p>
-      </div></li>
-    </ol>
-
+    <header>
+      <div class="brand"><img src="icon-48.png" width="36" height="36" alt=""><div><h1>Glint</h1><p class="tagline">标签页，随手找到</p></div></div>
+      <span id="browser-name">浏览器</span>
+    </header>
     <section class="connection" aria-label="连接状态">
-      <div><span id="status-dot" class="status-dot" aria-hidden="true"></span><span id="connection-status" role="status" aria-live="polite">正在检查连接…</span></div>
+      <div class="connection-heading">
+        <div class="connection-title"><span id="status-dot" class="status-dot" aria-hidden="true"></span><span id="connection-status" role="status" aria-live="polite">正在检查连接…</span></div>
+        <button id="retry" type="button">重试连接</button>
+      </div>
       <p id="connection-detail" class="hint">正在唤醒扩展后台服务。</p>
-      <button id="retry" type="button">重试连接</button>
-    </section>
-
-    <details>
-      <summary>高级排查：旧版或其他版本扩展</summary>
-      <p>从旧版升级后，请先在浏览器的扩展管理页重新加载 Glint。新版内置扩展 ID 为 <code>pecljnjkgandbbelbajkppllibpehhpe</code>；如果下面仍显示旧 ID，请移除旧扩展，再加载 Glint 向导提供的新目录。</p>
-      <p>使用商店版或其他 ID 的扩展时，复制下面的 ID，在 Glint 选择浏览器页面点击<strong>其他版本：手动填写扩展 ID</strong>，填写到对应浏览器并注册。</p>
       <label class="hint" for="extension-id">当前扩展 ID</label>
       <div class="row"><input id="extension-id" readonly spellcheck="false" aria-describedby="copy-status"><button id="copy-id" type="button">复制 ID</button></div>
       <p id="copy-status" class="hint feedback" role="status" aria-live="polite"></p>
-      <p class="hint">更换 Glint.exe 的位置后，请重新运行“连接浏览器”向导，更新连接信息。无需管理员权限。</p>
-    </details>
-
+    </section>
+    <section class="keyboard-guide" aria-label="搜索快捷键">
+      <p class="shortcut-label">默认快捷键</p>
+      <div class="shortcut"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd><span>呼出搜索</span></div>
+      <p>输入标题或网址，按 <kbd>Enter</kbd> 切换标签页。</p>
+      <p class="hint">已修改快捷键？请使用桌面端设置的组合键。</p>
+    </section>
     <details>
-      <summary>给这个配置文件起个名字（可选）</summary>
-      <p class="hint">浏览器不会向扩展提供配置文件显示名称。这个本地标签会出现在搜索结果中，方便区分工作、个人等来源。</p>
+      <summary>配置文件名称</summary>
+      <p class="hint">给当前配置文件设置“工作”“个人”等标签，方便区分搜索结果来源。</p>
       <form id="profile-form">
         <label for="profile-label">配置文件标签</label>
         <input id="profile-label" name="profileLabel" maxlength="80" autocomplete="off" placeholder="例如：工作">
         <div class="form-actions"><button type="submit">保存标签</button><span id="save-status" class="hint" role="status" aria-live="polite"></span></div>
       </form>
     </details>
-    <footer><p class="hint">每个需要搜索的 Chrome / Edge 配置文件都要安装扩展。此扩展只读取标签页元数据，不读取网页正文。以后点击浏览器工具栏中的 Glint 图标，就能回到这里。</p></footer>
+    <details>
+      <summary>连接帮助</summary>
+      <p class="hint">首次使用时，回到 Glint 桌面的“连接浏览器”向导，选择当前浏览器并检查连接。找不到向导时，从 Glint 系统托盘菜单打开“连接浏览器”。</p>
+      <p class="hint">从旧版升级时，请重新运行桌面连接向导，在浏览器中从向导提供的新文件夹加载扩展一次。更换 EXE 位置后，也请重新运行向导以更新连接信息。</p>
+      <p class="hint">关闭这个面板不会断开连接。扩展会在浏览器后台自动连接，状态面板无需一直打开。</p>
+    </details>
+    <footer><p class="hint">每个需要搜索的 Chrome / Edge 配置文件都要安装扩展。仅处理标签页标题和网址，不读取网页正文。</p></footer>
   </main>
   <script src="options.js"></script>
 </body>

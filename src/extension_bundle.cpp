@@ -20,6 +20,10 @@ enum : int {
     ResourceBackgroundCore = 103,
     ResourceOptionsHtml = 104,
     ResourceOptionsJs = 105,
+    ResourceIcon16 = 106,
+    ResourceIcon32 = 107,
+    ResourceIcon48 = 108,
+    ResourceIcon128 = 109,
 };
 
 struct ResourceSpec {
@@ -27,12 +31,16 @@ struct ResourceSpec {
     const wchar_t* filename;
 };
 
-constexpr std::array<ResourceSpec, 5> kResources = {{
+constexpr std::array<ResourceSpec, 9> kResources = {{
     {ResourceManifest, L"manifest.json"},
     {ResourceBackground, L"background.js"},
     {ResourceBackgroundCore, L"background-core.js"},
     {ResourceOptionsHtml, L"options.html"},
     {ResourceOptionsJs, L"options.js"},
+    {ResourceIcon16, L"icon-16.png"},
+    {ResourceIcon32, L"icon-32.png"},
+    {ResourceIcon48, L"icon-48.png"},
+    {ResourceIcon128, L"icon-128.png"},
 }};
 
 std::wstring windows_error(DWORD code) {
@@ -211,7 +219,11 @@ bool ensure_extracted(std::filesystem::path& directory, std::wstring& error) {
 
     std::filesystem::path local_data;
     if (!local_app_data(local_data, error)) return false;
-    directory = local_data / L"Glint" / L"extension";
+    // The pre-key bundle used Glint/extension. Reusing that path after adding
+    // a manifest key can make Chrome's old path-ID record invalidate the new
+    // installation on every startup. Keep this public-key directory stable
+    // and leave the old directory untouched for existing browser installs.
+    directory = local_data / L"Glint" / L"browser-extension";
 
     std::error_code filesystem_error;
     std::filesystem::create_directories(directory, filesystem_error);

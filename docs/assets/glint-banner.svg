@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title desc">
+  <title id="title">Glint — Find your tab. Keep your flow.</title>
+  <desc id="desc">Glint is a lightweight native Windows search for Chrome and Edge tabs.</desc>
+  <rect width="1200" height="320" rx="28" fill="#f5f8fd"/>
+  <path d="M1050 36 L1070 94 L1128 114 L1070 134 L1050 192 L1030 134 L972 114 L1030 94 Z" fill="#e8effc"/>
+  <circle cx="1144" cy="235" r="8" fill="#d9e5fb"/>
+  <circle cx="996" cy="246" r="4" fill="#d9e5fb"/>
+  <g transform="translate(78 68) scale(1.84)"><rect width="100" height="100" rx="24" fill="#2c61bd"/>
+  <path d="M50 8 L60.8 39.2 L92 50 L60.8 60.8 L50 92 L39.2 60.8 L8 50 L39.2 39.2 Z" fill="#fff"/>
+  <path d="M50 27.5 L56.2 43.8 L72.5 50 L56.2 56.2 L50 72.5 L43.8 56.2 L27.5 50 L43.8 43.8 Z" fill="#dce8ff"/>
+  <circle cx="75" cy="25" r="7" fill="#a9c6ff"/></g>
+  <text x="310" y="152" fill="#223043" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="82" font-weight="600" letter-spacing="-3">Glint</text>
+  <text x="314" y="203" fill="#53657b" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="27">Find your tab. Keep your flow.</text>
+  <text x="315" y="246" fill="#2c61bd" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="15" font-weight="600" letter-spacing="1.5">WINDOWS · CHROME · EDGE</text>
+</svg>
