@@ -75,6 +75,13 @@ are restored; maximized windows keep their state. Glint checks the resulting
 focus and reports activation failure if the browser cannot bring the target
 forward.
 
+Opening search or changing the query selects the first result while keeping the
+caret in the search field. Press Enter to switch immediately. Background tab
+updates preserve your selected tab when it still matches; if it disappears,
+the first remaining result is selected. With no results, Enter does nothing.
+While an input method is composing text or showing candidates, its keys stay
+with the search field, so confirming a candidate does not switch tabs.
+
 | Context | Key | Behavior |
 | --- | --- | --- |
 | Anywhere | `Ctrl+Shift+Space` by default | Open Glint search. |
@@ -82,8 +89,10 @@ forward.
 | Search field | `↑` | Keep focus in the field. |
 | First result | `↑`, `Home` or `PageUp` | Return to the search field, preserving text and caret. |
 | Other results | Arrow keys, `Home` and `PageUp` | Use normal list navigation. |
-| Selected result | `Enter` | Activate the tab. |
+| Search field or selected result | `Enter` | Activate the selected tab, unless an input method is handling the key. |
 | Search window | `Esc` | Hide search. |
+| Search window | `Alt+F4` or close button | Hide search; Glint remains in the tray. |
+| Search window | `Alt+Space` or right-click the title bar | Open the window menu. |
 
 `Fn+↑` also returns from the first result when the keyboard maps it to `Home`
 or `PageUp`. Those keys keep their usual editing behavior in the search field.

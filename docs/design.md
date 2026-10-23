@@ -85,6 +85,21 @@ PageUp (`VK_PRIOR`) also return from the first result, covering Fn+Up when a
 keyboard maps it to either key. Elsewhere in the list they retain native
 jump-to-first/page-up behavior; in the query they retain native editing behavior.
 
+Result refreshes select the first match for a changed query or a newly opened
+search. Background updates preserve the selected connection/tab identity when
+it remains in the filtered rows. Selection never takes keyboard focus from the
+edit; an emptied list returns focus to the edit with its caret intact. The
+native edit subclass observes IME composition and candidate notifications. The
+message loop dispatches IME-owned keys directly to the control before processing
+application shortcuts or dialog navigation.
+
+The search window retains its native border and uses a 32-DIP client title bar
+with a real, accessible close button inset 6 DIP from the right. The cross stays
+dark when the window loses activation; hover/press use red, and high contrast
+uses system colors. Empty caption areas return HTCAPTION for native dragging.
+Alt+Space and caption right-click open the system menu explicitly; its Close
+command, Alt+F4, and the button all retain the hide-to-tray behavior.
+
 Global shortcuts are recorded in a dedicated native settings window and stored
 as one `HotkeyBinding` DWORD (high 16 bits modifiers, low 16 bits virtual key).
 Legacy `Hotkey` preset indices remain readable. A candidate registers under the

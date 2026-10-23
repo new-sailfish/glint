@@ -3,10 +3,12 @@
 The PNG images in this directory were rendered on Windows on 2026-10-22 from
 Glint's native C++ interface code at 96 DPI. They show the application's client
 area; the operating system's outer title bar and window frame are omitted.
+The search examples include Glint's client title bar and inset close button,
+updated from the local validation build for the search feedback changes.
 
 | Image | Native source | Size | Displayed state |
 | --- | --- | --- | --- |
-| `search.png` | `src/win_app.cpp` | 700 × 520 | Search for “设计”, four matching example tabs, two example profiles |
+| `search.png` | `src/win_app.cpp` | 700 × 552 | Search for “设计”, first result selected, four matching example tabs, two example profiles |
 | `setup-browser.png` | `src/setup_window.cpp` | 680 × 586 | Connection guide, choose Chrome |
 | `setup-load.png` | `src/setup_window.cpp` | 680 × 586 | Connection guide, load the extension folder |
 | `setup-connected.png` | `src/setup_window.cpp` | 680 × 586 | Connection guide, synchronized example Chrome profile |

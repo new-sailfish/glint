@@ -14,10 +14,13 @@
 #include "update_window.hpp"
 #include "update_install.hpp"
 #include "search_navigation.hpp"
+#include "search_results.hpp"
+#include "search_caption.hpp"
 #include "win_common.hpp"
 #include "ui_theme.hpp"
 
 #include <windows.h>
+#include <windowsx.h>
 #include <commctrl.h>
 #include <sddl.h>
 #include <shellapi.h>
@@ -54,6 +57,7 @@ constexpr UINT ID_TRAY_SETUP = 1004;
 constexpr UINT ID_LANGUAGE = 1005;
 constexpr UINT ID_TRAY_UPDATE = 1006;
 constexpr UINT ID_TRAY_INSTALL = 1007;
+constexpr UINT ID_SEARCH_CLOSE = 1008;
 constexpr UINT ID_LANGUAGE_SYSTEM = 1010;
 constexpr UINT ID_LANGUAGE_ENGLISH = 1011;
 constexpr UINT ID_LANGUAGE_CHINESE = 1012;
@@ -88,13 +92,22 @@ public:
             // WM_DESTROY clears the owned windows before WM_QUIT is read;
             // previously posted messages can still be drained in between.
             if (setup_ && setup_->translate(message)) continue;
+            if (handle_search_key(message, edit_, list_, search_input_method_, [this] { activate_selected(); })) continue;
+            if (message.message == WM_SYSKEYDOWN && message.wParam == VK_SPACE &&
+                (message.lParam & (1LL << 29)) &&
+                (message.hwnd == window_ || IsChild(window_, message.hwnd))) {
+                show_system_menu(); continue;
+            }
+            if (message.message == WM_KEYDOWN && message.wParam == VK_RETURN &&
+                GetFocus() == caption_.close_button()) {
+                SendMessageW(caption_.close_button(), BM_CLICK, 0, 0); continue;
+            }
             if (message.message == WM_KEYDOWN && message.wParam == VK_ESCAPE &&
                 (message.hwnd == window_ || IsChild(window_, message.hwnd))) {
                 hide_search(); continue;
             }
             if (message.message == WM_KEYDOWN && (GetFocus() == edit_ || GetFocus() == list_)) {
                 if (message.wParam == VK_ESCAPE) { hide_search(); continue; }
-                if (message.wParam == VK_RETURN) { activate_selected(); continue; }
                 if (navigate_search_results(edit_, list_, static_cast<UINT>(message.wParam))) continue;
             }
             if (IsDialogMessageW(window_, &message)) continue;
@@ -118,6 +131,9 @@ private:
     HWND settings_button_ = nullptr;
     HWND language_button_ = nullptr;
     HWND keyboard_hint_ = nullptr;
+    SearchCaption caption_;
+    SearchResultSelection result_selection_;
+    SearchInputMethod search_input_method_;
     HFONT font_ = nullptr;
     HFONT heading_font_ = nullptr;
     HFONT small_font_ = nullptr;
@@ -187,6 +203,11 @@ private:
             }
             return 0;
         case WM_COMMAND:
+            if (LOWORD(wparam) == ID_SEARCH_CLOSE && HIWORD(wparam) == BN_CLICKED &&
+                reinterpret_cast<HWND>(lparam) == self->caption_.close_button()) {
+                if (IsWindowEnabled(hwnd)) SendMessageW(hwnd, WM_CLOSE, 0, 0);
+                return 0;
+            }
             if (HIWORD(wparam) == EN_CHANGE && reinterpret_cast<HWND>(lparam) == self->edit_) { self->refresh_results(); return 0; }
             if ((HIWORD(wparam) == EN_SETFOCUS || HIWORD(wparam) == EN_KILLFOCUS) &&
                 reinterpret_cast<HWND>(lparam) == self->edit_) {
@@ -244,6 +265,33 @@ private:
         }
         case WM_SIZE:
             self->layout(); return 0;
+        case WM_ENABLE:
+            self->caption_.set_enabled(wparam != FALSE); return 0;
+        case WM_NCHITTEST: {
+            const auto hit = DefWindowProcW(hwnd, message, wparam, lparam);
+            if (hit != HTCLIENT) return hit;
+            POINT point{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+            ScreenToClient(hwnd, &point);
+            return self->caption_.is_drag_point(point) ? HTCAPTION : HTCLIENT;
+        }
+        case WM_NCRBUTTONUP:
+            if (wparam == HTCAPTION) {
+                self->show_system_menu(POINT{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)});
+                return 0;
+            }
+            break;
+        case WM_NCLBUTTONDBLCLK:
+            if (wparam == HTCAPTION) return 0; // The search window is not maximizable.
+            break;
+        case WM_SYSCOMMAND:
+            if ((wparam & 0xfff0) == SC_CLOSE) {
+                if (IsWindowEnabled(hwnd)) SendMessageW(hwnd, WM_CLOSE, 0, 0);
+                return 0;
+            }
+            if ((wparam & 0xfff0) == SC_KEYMENU && lparam == VK_SPACE) {
+                self->show_system_menu(); return 0;
+            }
+            break;
         case WM_DPICHANGED: {
             self->dpi_ = HIWORD(wparam);
             self->update_font();
@@ -283,8 +331,8 @@ private:
         klass.lpszClassName = kClassName;
         if (!RegisterClassExW(&klass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
         dpi_ = GetDpiForSystem();
-        RECT frame{0, 0, px(700), px(520)};
-        constexpr DWORD style = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN;
+        RECT frame{0, 0, px(700), px(520) + SearchCaption::height(dpi_)};
+        constexpr DWORD style = WS_POPUP | WS_BORDER | WS_SYSMENU | WS_CLIPCHILDREN;
         AdjustWindowRectExForDpi(&frame, style, FALSE, WS_EX_TOOLWINDOW | WS_EX_CONTROLPARENT, dpi_);
         POINT point{}; GetCursorPos(&point);
         MONITORINFO monitor{sizeof(monitor)};
@@ -302,7 +350,7 @@ private:
         // creating controls, then size its client area using that same scale.
         dpi_ = GetDpiForWindow(window_);
         if (!dpi_) dpi_ = 96;
-        frame = {0, 0, px(700), px(520)};
+        frame = {0, 0, px(700), px(520) + SearchCaption::height(dpi_)};
         AdjustWindowRectExForDpi(&frame, style, FALSE, WS_EX_TOOLWINDOW | WS_EX_CONTROLPARENT, dpi_);
         const int actual_width = (std::min)(frame.right - frame.left, work.right - work.left);
         const int actual_height = (std::min)(frame.bottom - frame.top, work.bottom - work.top);
@@ -322,6 +370,7 @@ private:
             0, 0, 0, 0, window_, nullptr, klass.hInstance, nullptr);
         edit_ = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                 12, 12, 860, 30, window_, nullptr, klass.hInstance, nullptr);
+        if (!search_input_method_.attach(edit_)) return false;
         list_ = CreateWindowExW(0, WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS,
                                 12, 52, 860, 420, window_, nullptr, klass.hInstance, nullptr);
         status_ = CreateWindowExW(0, L"STATIC", i18n::text(L"0 tabs", L"0 个标签页"), WS_CHILD | WS_VISIBLE | SS_ENDELLIPSIS,
@@ -335,6 +384,7 @@ private:
             12, 478, 860, 100, window_, nullptr, klass.hInstance, nullptr);
         connection_hint_ = CreateWindowExW(0, L"STATIC", i18n::text(L"Click “Connect browser” to add Chrome or Edge.", L"点击“连接新的浏览器”，按引导添加 Chrome 或 Edge。"),
             WS_CHILD | WS_VISIBLE | SS_CENTER, 24, 510, 830, 24, window_, nullptr, klass.hInstance, nullptr);
+        if (!caption_.create(window_, ID_SEARCH_CLOSE, L"Glint " GLINT_VERSION_WSTRING)) return false;
         update_font();
         ui::style_button(setup_button_, true);
         ui::style_button(settings_button_);
@@ -414,27 +464,32 @@ private:
         if (!window_ || !edit_) return;
         RECT rect{}; GetClientRect(window_, &rect);
         const int width = rect.right - rect.left;
-        const int height = rect.bottom - rect.top;
+        const int caption_height = SearchCaption::height(dpi_);
+        const int height = rect.bottom - rect.top - caption_height;
+        caption_.layout(width, dpi_);
+        const auto move = [caption_height](HWND control, int x, int y, int w, int h) {
+            MoveWindow(control, x, y + caption_height, w, h, TRUE);
+        };
         const int content_width = (std::max)(px(200), width - px(40));
         const bool compact = height < px(420);
         const bool short_viewport = height < px(350);
         const int results_top = px(compact ? 112 : 132);
         const int overview_top = height - px(short_viewport ? 114 : 146);
         const int results_height = (std::max)(px(42), overview_top - results_top - px(32));
-        MoveWindow(heading_, px(64), px(14), (std::min)(px(140), width - px(190)), px(29), TRUE);
-        MoveWindow(subtitle_, px(64), px(44), (std::min)(px(240), width - px(200)), px(20), TRUE);
+        move(heading_, px(64), px(14), (std::min)(px(140), width - px(190)), px(29));
+        move(subtitle_, px(64), px(44), (std::min)(px(240), width - px(200)), px(20));
         ShowWindow(subtitle_, compact ? SW_HIDE : SW_SHOW);
-        MoveWindow(settings_button_, width - px(126), px(22), px(106), px(30), TRUE);
-        MoveWindow(language_button_, width - px(276), px(22), px(140), px(30), TRUE);
-        MoveWindow(edit_, px(54), px(compact ? 69 : 84), content_width - px(46), px(24), TRUE);
-        MoveWindow(list_, px(20), results_top, content_width, results_height, TRUE);
-        MoveWindow(status_, px(20), results_top + results_height + px(6), px(210), px(22), TRUE);
-        MoveWindow(keyboard_hint_, px(230), results_top + results_height + px(6), (std::max)(px(1), content_width - px(210)), px(22), TRUE);
+        move(settings_button_, width - px(126), px(22), px(106), px(30));
+        move(language_button_, width - px(276), px(22), px(140), px(30));
+        move(edit_, px(54), px(compact ? 69 : 84), content_width - px(46), px(24));
+        move(list_, px(20), results_top, content_width, results_height);
+        move(status_, px(20), results_top + results_height + px(6), px(210), px(22));
+        move(keyboard_hint_, px(230), results_top + results_height + px(6), (std::max)(px(1), content_width - px(210)), px(22));
         ShowWindow(keyboard_hint_, width >= px(540) ? SW_SHOW : SW_HIDE);
-        MoveWindow(connection_summary_, px(20), overview_top + px(7), content_width - px(180), px(24), TRUE);
-        MoveWindow(setup_button_, width - px(170), overview_top, px(150), px(32), TRUE);
-        MoveWindow(connection_list_, px(20), overview_top + px(42), content_width, px(short_viewport ? 60 : 90), TRUE);
-        MoveWindow(connection_hint_, px(30), overview_top + px(short_viewport ? 64 : 82), content_width - px(20), px(22), TRUE);
+        move(connection_summary_, px(20), overview_top + px(7), content_width - px(180), px(24));
+        move(setup_button_, width - px(170), overview_top, px(150), px(32));
+        move(connection_list_, px(20), overview_top + px(42), content_width, px(short_viewport ? 60 : 90));
+        move(connection_hint_, px(30), overview_top + px(short_viewport ? 64 : 82), content_width - px(20), px(22));
         const int available = (std::max)(px(120), content_width - GetSystemMetricsForDpi(SM_CXVSCROLL, dpi_));
         ListView_SetColumnWidth(list_, 0, available * 44 / 100);
         ListView_SetColumnWidth(list_, 1, available * 34 / 100);
@@ -449,7 +504,11 @@ private:
 
     void paint(HDC dc) const {
         ui::paint_background(window_, dc);
+        caption_.paint(dc, small_font_);
         RECT client{}; GetClientRect(window_, &client);
+        const int content_saved = SaveDC(dc);
+        SetViewportOrgEx(dc, 0, SearchCaption::height(dpi_), nullptr);
+        client.bottom -= SearchCaption::height(dpi_);
         const bool compact = client.bottom < px(420);
         const int search_top = px(compact ? 62 : 74);
         RECT logo{px(20), px(22), px(52), px(54)}; ui::paint_logo(dc, logo);
@@ -465,6 +524,7 @@ private:
         Ellipse(dc, px(34), search_center, px(44), search_center + px(10));
         MoveToEx(dc, px(43), search_center + px(9), nullptr); LineTo(dc, px(47), search_center + px(13));
         RestoreDC(dc, saved); DeleteObject(search_pen); DeleteObject(pen);
+        RestoreDC(dc, content_saved);
     }
 
     LRESULT draw_list(NMLVCUSTOMDRAW& draw) const {
@@ -521,9 +581,27 @@ private:
     }
 
     void show_search() {
-        ShowWindow(window_, SW_SHOW); SetForegroundWindow(window_); SetFocus(edit_); SendMessageW(edit_, EM_SETSEL, 0, -1); refresh_results();
+        ShowWindow(window_, SW_SHOW); SetForegroundWindow(window_); SetFocus(edit_); SendMessageW(edit_, EM_SETSEL, 0, -1); refresh_results(true);
     }
     void hide_search() { ShowWindow(window_, SW_HIDE); }
+
+    void show_system_menu(POINT point = {-1, -1}) {
+        if (!window_ || !IsWindowEnabled(window_)) return;
+        const HMENU menu = GetSystemMenu(window_, FALSE);
+        if (!menu) return;
+        if (point.x == -1 && point.y == -1) {
+            point = {0, SearchCaption::height(dpi_)};
+            ClientToScreen(window_, &point);
+        }
+        // A fixed-size tray tool can move and close, but never resize/maximize.
+        for (const auto command : {SC_RESTORE, SC_SIZE, SC_MINIMIZE, SC_MAXIMIZE})
+            EnableMenuItem(menu, command, MF_BYCOMMAND | MF_GRAYED);
+        EnableMenuItem(menu, SC_MOVE, MF_BYCOMMAND | MF_ENABLED);
+        EnableMenuItem(menu, SC_CLOSE, MF_BYCOMMAND | MF_ENABLED);
+        const auto command = TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON,
+            point.x, point.y, window_, nullptr);
+        if (command) SendMessageW(window_, WM_SYSCOMMAND, command, 0);
+    }
 
     std::wstring active_hotkey_name() const {
         return hotkey_.active() ? hotkey::name(hotkey_.current()) : std::wstring{};
@@ -612,6 +690,7 @@ private:
     }
 
     void refresh_language() {
+        caption_.refresh_language();
         SetWindowTextW(subtitle_, i18n::text(L"Find your open tabs", L"标签页，随手找到"));
         SetWindowTextW(settings_button_, i18n::text(L"Shortcut", L"快捷键设置"));
         SetWindowTextW(keyboard_hint_, i18n::text(L"↑ ↓ Select     Enter Switch     Esc Hide", L"↑ ↓ 选择     Enter 切换     Esc 收起"));
@@ -665,7 +744,7 @@ private:
         hotkey_window_->show(hotkey_.current());
     }
 
-    void refresh_results() {
+    void refresh_results(bool reset_selection = false) {
         if (!edit_ || !list_) return;
         refresh_connections();
         const int length = GetWindowTextLengthW(edit_);
@@ -673,6 +752,7 @@ private:
         if (length) GetWindowTextW(edit_, query.data(), length + 1);
         query.resize(static_cast<std::size_t>(length));
         query_empty_ = query.empty();
+        result_selection_.prepare(list_, query, rows_, reset_selection);
         rows_ = index_.search(query);
         SendMessageW(list_, WM_SETREDRAW, FALSE, 0); ListView_DeleteAllItems(list_);
         for (std::size_t i = 0; i < rows_.size(); ++i) {
@@ -684,6 +764,7 @@ private:
             if (source.empty()) source = row.browser;
             ListView_SetItemText(list_, static_cast<int>(i), 2, const_cast<LPWSTR>(source.c_str()));
         }
+        result_selection_.restore(edit_, list_, rows_);
         SendMessageW(list_, WM_SETREDRAW, TRUE, 0); InvalidateRect(list_, nullptr, FALSE);
         update_result_status();
     }

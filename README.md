@@ -29,8 +29,9 @@ existing tab and its window.
 
 ## Features and workflow
 
-Press **Ctrl+Shift+Space**, type part of a title or URL, select a result and press
-**Enter**. Glint activates that tab and brings its browser window forward,
+Press **Ctrl+Shift+Space** and type part of a title or URL. The first result is
+selected automatically; press **Enter** to switch, or use the arrow keys to choose
+another result. Glint activates that tab and brings its browser window forward,
 restoring the window if it is minimized.
 
 ![Glint search window with sample tab data from Chrome and Edge profiles](docs/assets/search-en.png)
@@ -112,8 +113,8 @@ address. For connection errors, use **Connection help** in the guide or follow t
 | Key or action | Result |
 | --- | --- |
 | `Ctrl+Shift+Space` | Open search using the default global shortcut. |
-| Type a title or URL fragment | Filter connected tabs. |
-| `↓` in the search field | Select the first result. |
+| Type a title or URL fragment | Filter connected tabs and select the first result while keeping focus in the search field. |
+| `↓` in the search field | Move focus to the first result. |
 | `↑` on the first result | Return to the search field, retaining its text and caret. |
 | `Enter` / `Esc` | Activate the selected tab / hide search. |
 | Tray → **Configure shortcut** | Record and save a different shortcut. |

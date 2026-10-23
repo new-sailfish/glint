@@ -144,7 +144,7 @@ if(GLINT_BUILD_TESTS)
     add_test(NAME glint_language COMMAND glint_language_tests)
 
     add_executable(glint_search_navigation_tests tests/test_search_navigation.cpp)
-    target_include_directories(glint_search_navigation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_include_directories(glint_search_navigation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_link_libraries(glint_search_navigation_tests PRIVATE user32 comctl32)
     target_compile_features(glint_search_navigation_tests PRIVATE cxx_std_20)
     target_compile_definitions(glint_search_navigation_tests PRIVATE UNICODE _UNICODE)
@@ -153,6 +153,17 @@ if(GLINT_BUILD_TESTS)
       set_property(TARGET glint_search_navigation_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()
     add_test(NAME glint_search_navigation COMMAND glint_search_navigation_tests)
+
+    add_executable(glint_search_caption_tests tests/test_search_caption.cpp)
+    target_include_directories(glint_search_caption_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(glint_search_caption_tests PRIVATE user32 gdi32 comctl32 advapi32)
+    target_compile_features(glint_search_caption_tests PRIVATE cxx_std_20)
+    target_compile_definitions(glint_search_caption_tests PRIVATE UNICODE _UNICODE)
+    if(MSVC)
+      target_compile_options(glint_search_caption_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+      set_property(TARGET glint_search_caption_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_search_caption COMMAND glint_search_caption_tests)
 
     add_executable(glint_hotkey_tests tests/test_hotkey.cpp src/hotkey.cpp)
     target_include_directories(glint_hotkey_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -295,7 +306,7 @@ if(GLINT_BUILD_TESTS)
       set_tests_properties(glint_update_process PROPERTIES TIMEOUT 180)
       # Desktop geometry, keyboard focus and global hotkeys are validated on
       # the developer desktop; CI excludes this label in its headless checks.
-      set_tests_properties(glint_search_navigation glint_hotkey glint_hotkey_window
+      set_tests_properties(glint_search_navigation glint_search_caption glint_hotkey glint_hotkey_window
         glint_setup_window PROPERTIES LABELS desktop)
     endif()
   endif()

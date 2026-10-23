@@ -1,4 +1,5 @@
 #include "search_navigation.hpp"
+#include "search_results.hpp"
 
 #include <iostream>
 #include <iterator>
@@ -25,6 +26,9 @@ public:
             unrelated = CreateWindowExW(0, L"BUTTON", L"Unrelated", WS_CHILD | WS_VISIBLE,
                                         0, 0, 20, 20, parent_, nullptr, GetModuleHandleW(nullptr), nullptr);
             require(edit && list && unrelated, "create real EDIT, list-view, and unrelated controls");
+            require(input_method.attach(edit), "track input-method messages on the native EDIT");
+            require(SetWindowSubclass(edit, observe_edit, 1, reinterpret_cast<DWORD_PTR>(this)),
+                    "observe keys delivered to the native EDIT");
             for (int i = 0; i != result_count; ++i) {
                 auto label = L"Result " + std::to_wstring(i);
                 LVITEMW item{};
@@ -81,11 +85,236 @@ public:
         require(actual_start == start && actual_end == end, "navigation preserves the existing edit selection or caret");
     }
 
+    void refresh(std::wstring_view query, std::vector<glint::Tab> next_rows, bool reset = false) {
+        result_selection.prepare(list, query, rows, reset);
+        rows = std::move(next_rows);
+        ListView_DeleteAllItems(list);
+        for (std::size_t i = 0; i < rows.size(); ++i) {
+            LVITEMW item{};
+            item.mask = LVIF_TEXT;
+            item.iItem = static_cast<int>(i);
+            item.pszText = rows[i].title.data();
+            require(ListView_InsertItem(list, &item) == static_cast<int>(i), "insert refreshed result");
+        }
+        result_selection.restore(edit, list, rows);
+    }
+
+    bool route_key(UINT key, UINT message = WM_KEYDOWN) {
+        MSG input{};
+        input.hwnd = GetFocus();
+        input.message = message;
+        input.wParam = key;
+        input.lParam = 1;
+        return glint::handle_search_key(input, edit, list, input_method, [this] { ++activations; });
+    }
+
     HWND edit = nullptr, list = nullptr, unrelated = nullptr;
+    glint::SearchInputMethod input_method;
+    glint::SearchResultSelection result_selection;
+    std::vector<glint::Tab> rows;
+    int activations = 0, edit_keydowns = 0, edit_returns = 0;
+    bool complete_ime_on_keydown = false;
 
 private:
+    static LRESULT CALLBACK observe_edit(HWND window, UINT message, WPARAM wparam, LPARAM lparam,
+                                         UINT_PTR, DWORD_PTR data) {
+        auto* controls = reinterpret_cast<SearchControls*>(data);
+        if (message == WM_KEYDOWN) {
+            ++controls->edit_keydowns;
+            if (controls->complete_ime_on_keydown) {
+                SendMessageW(window, WM_IME_NOTIFY, IMN_CLOSECANDIDATE, 1);
+                SendMessageW(window, WM_IME_ENDCOMPOSITION, 0, 0);
+            }
+        }
+        if (message == WM_CHAR && wparam == VK_RETURN) ++controls->edit_returns;
+        return DefSubclassProc(window, message, wparam, lparam);
+    }
+
     HWND parent_ = nullptr;
 };
+
+std::vector<glint::Tab> result_rows(std::initializer_list<glint::TabKey> keys) {
+    std::vector<glint::Tab> rows;
+    for (const auto key : keys) {
+        glint::Tab row;
+        row.key = key;
+        row.title = L"Tab " + std::to_wstring(key.tab_id);
+        rows.push_back(std::move(row));
+    }
+    return rows;
+}
+
+void refresh_selects_first_without_moving_edit_caret() {
+    SearchControls controls(0);
+    controls.focus(controls.edit);
+    controls.set_edit_selection(2, 7);
+    controls.refresh(L"query", result_rows({{1, 10}, {1, 20}}));
+    controls.require_selection(0);
+    require(GetFocus() == controls.edit, "first result is highlighted while query keeps focus");
+    controls.require_edit_unchanged(2, 7);
+    require(controls.route_key(VK_RETURN), "Enter activates the initially highlighted result");
+    require(controls.activations == 1, "first result can be activated immediately");
+}
+
+void background_refresh_preserves_tab_identity_after_reordering() {
+    for (const bool edit_focus : {false, true}) {
+        SearchControls controls(0);
+        controls.refresh(L"query", result_rows({{1, 10}, {1, 20}, {2, 20}}));
+        controls.select(2);
+        controls.focus(edit_focus ? controls.edit : controls.list);
+        controls.set_edit_selection(3, 3);
+        controls.refresh(L"query", result_rows({{1, 20}, {2, 20}, {1, 10}}));
+        controls.require_selection(1);
+        require(GetFocus() == (edit_focus ? controls.edit : controls.list), "background refresh retains control focus");
+        controls.require_edit_unchanged(3, 3);
+    }
+}
+
+void changed_query_and_explicit_reset_choose_first() {
+    SearchControls controls(0);
+    const auto rows = result_rows({{1, 10}, {1, 20}});
+    controls.refresh(L"query", rows);
+    controls.select(1);
+    controls.focus(controls.edit);
+    controls.set_edit_selection(4, 4);
+    controls.refresh(L"changed", rows);
+    controls.require_selection(0);
+    controls.select(1);
+    controls.refresh(L"changed", rows, true);
+    controls.require_selection(0);
+    controls.require_edit_unchanged(4, 4);
+}
+
+void removed_selection_falls_back_to_first() {
+    SearchControls controls(0);
+    controls.refresh(L"query", result_rows({{1, 10}, {2, 20}}));
+    controls.select(1);
+    controls.focus(controls.list);
+    controls.refresh(L"query", result_rows({{1, 30}, {1, 20}}));
+    controls.require_selection(0);
+    require(GetFocus() == controls.list, "fallback selection keeps list focus");
+}
+
+void empty_refresh_clears_selection_and_returns_list_focus_to_edit() {
+    SearchControls controls(0);
+    controls.refresh(L"query", result_rows({{1, 10}, {1, 20}}));
+    controls.select(1);
+    controls.focus(controls.list);
+    controls.set_edit_selection(1, 8);
+    controls.refresh(L"query", {});
+    require(ListView_GetSelectedCount(controls.list) == 0, "empty results have no selected row");
+    require(GetFocus() == controls.edit, "empty refresh returns list focus to query");
+    controls.require_edit_unchanged(1, 8);
+    controls.refresh(L"query", result_rows({{3, 30}}));
+    controls.require_selection(0);
+    require(GetFocus() == controls.edit, "first arriving result keeps query focus");
+}
+
+void refresh_does_not_take_focus_from_unrelated_control() {
+    SearchControls controls(0);
+    controls.focus(controls.unrelated);
+    controls.refresh(L"query", result_rows({{1, 10}}));
+    controls.require_selection(0);
+    require(GetFocus() == controls.unrelated, "refresh never steals focus from another control");
+    controls.refresh(L"query", {});
+    require(GetFocus() == controls.unrelated, "empty refresh never steals unrelated focus");
+}
+
+void composition_enter_reaches_native_edit_without_activation() {
+    SearchControls controls;
+    controls.select(0);
+    controls.focus(controls.edit);
+    controls.set_edit_selection(3, 3);
+    SendMessageW(controls.edit, WM_IME_STARTCOMPOSITION, 0, 0);
+    require(controls.route_key(VK_RETURN), "route composition Enter directly to native EDIT");
+    require(controls.activations == 0 && controls.edit_keydowns == 1,
+            "composition Enter reaches native EDIT without switching tabs");
+    controls.require_edit_unchanged(3, 3);
+    SendMessageW(controls.edit, WM_IME_ENDCOMPOSITION, 0, 0);
+    require(controls.route_key(VK_RETURN), "ordinary Enter activates after composition ends");
+    require(controls.activations == 1, "composition-end restores ordinary result activation");
+}
+
+void candidate_enter_reaches_edit_until_all_candidate_lists_close() {
+    SearchControls controls;
+    controls.select(0);
+    controls.focus(controls.edit);
+    SendMessageW(controls.edit, WM_IME_NOTIFY, IMN_OPENCANDIDATE, 1);
+    SendMessageW(controls.edit, WM_IME_NOTIFY, IMN_OPENCANDIDATE, 2);
+    SendMessageW(controls.edit, WM_IME_NOTIFY, IMN_CLOSECANDIDATE, 1);
+    require(controls.route_key(VK_RETURN), "route candidate-selection Enter to native EDIT");
+    require(controls.activations == 0 && controls.edit_keydowns == 1,
+            "an open candidate list owns Enter even after another candidate list closes");
+    SendMessageW(controls.edit, WM_IME_NOTIFY, IMN_CLOSECANDIDATE, 2);
+    require(controls.route_key(VK_RETURN) && controls.activations == 1,
+            "ordinary Enter activates once all candidate lists close");
+}
+
+void translated_process_key_reaches_native_edit() {
+    SearchControls controls;
+    controls.select(0);
+    controls.focus(controls.edit);
+    SendMessageW(controls.edit, WM_IME_STARTCOMPOSITION, 0, 0);
+    SendMessageW(controls.edit, WM_IME_ENDCOMPOSITION, 0, 0);
+    require(controls.route_key(VK_PROCESSKEY), "bypass dialog-key processing for VK_PROCESSKEY");
+    require(controls.activations == 0 && controls.edit_keydowns == 1,
+            "translated input-method key reaches native EDIT");
+}
+
+void completing_composition_during_enter_does_not_reuse_it_for_activation() {
+    SearchControls controls;
+    controls.select(0);
+    controls.focus(controls.edit);
+    SendMessageW(controls.edit, WM_IME_STARTCOMPOSITION, 0, 0);
+    SendMessageW(controls.edit, WM_IME_NOTIFY, IMN_OPENCANDIDATE, 1);
+    controls.complete_ime_on_keydown = true;
+    require(controls.route_key(VK_RETURN), "native EDIT completes composition while handling Enter");
+    require(!controls.input_method.active(), "native notifications closed composition and candidates");
+    require(controls.activations == 0 && controls.edit_keydowns == 1,
+            "the confirming Enter is never reused to activate a result after native processing");
+    controls.complete_ime_on_keydown = false;
+    require(controls.route_key(VK_RETURN) && controls.activations == 1,
+            "a separate Enter after composition completion activates the selected result");
+}
+
+void enter_without_results_reaches_native_edit() {
+    SearchControls controls(0);
+    controls.focus(controls.edit);
+    controls.set_edit_selection(2, 7);
+    require(controls.route_key(VK_RETURN), "handle Enter without results before dialog translation");
+    require(controls.activations == 0 && controls.edit_keydowns == 1,
+            "Enter without results reaches native EDIT without activation");
+    require(controls.route_key(VK_RETURN, WM_CHAR), "translated Enter character also reaches native EDIT");
+    require(controls.edit_returns == 1, "native EDIT receives Enter character");
+    controls.require_edit_unchanged(2, 7);
+}
+
+void input_method_owns_navigation_and_escape_until_focus_leaves_edit() {
+    SearchControls controls;
+    controls.select(0);
+    controls.focus(controls.edit);
+    SendMessageW(controls.edit, WM_IME_STARTCOMPOSITION, 0, 0);
+    for (const UINT key : {VK_UP, VK_DOWN, VK_ESCAPE})
+        require(controls.route_key(key), "input method receives its own navigation and cancel keys");
+    require(controls.edit_keydowns == 3 && controls.activations == 0,
+            "composition navigation remains inside the native EDIT");
+    controls.focus(controls.list);
+    require(controls.route_key(VK_RETURN) && controls.activations == 1, "list Enter is ordinary activation");
+    controls.focus(controls.edit);
+    require(controls.route_key(VK_RETURN) && controls.activations == 2,
+            "leaving edit focus clears stale composition state");
+}
+
+void search_key_routing_leaves_ordinary_keys_and_unrelated_focus_alone() {
+    SearchControls controls;
+    controls.select(0);
+    controls.focus(controls.edit);
+    for (const UINT key : {VK_UP, VK_DOWN, VK_ESCAPE, VK_TAB, 0x41})
+        require(!controls.route_key(key), "ordinary non-Enter key remains with existing message routing");
+    controls.focus(controls.unrelated);
+    require(!controls.route_key(VK_RETURN), "unrelated controls keep their own Enter behavior");
+    require(controls.activations == 0 && controls.edit_keydowns == 0, "ordinary routing causes no side effects");
+}
 
 void up_from_first_returns_to_query() {
     SearchControls controls;
@@ -328,6 +557,19 @@ int main() {
         return 1;
     }
     const std::pair<const char*, void (*)()> tests[] = {
+        {"Refresh selects first while preserving edit focus and caret", refresh_selects_first_without_moving_edit_caret},
+        {"Background refresh preserves full TabKey after reordering", background_refresh_preserves_tab_identity_after_reordering},
+        {"Changed query and explicit reset choose first", changed_query_and_explicit_reset_choose_first},
+        {"Removed selected tab falls back to first", removed_selection_falls_back_to_first},
+        {"Empty refresh clears selection and restores query focus", empty_refresh_clears_selection_and_returns_list_focus_to_edit},
+        {"Refresh preserves unrelated focus", refresh_does_not_take_focus_from_unrelated_control},
+        {"Composition Enter reaches native EDIT", composition_enter_reaches_native_edit_without_activation},
+        {"Candidate Enter reaches native EDIT until all lists close", candidate_enter_reaches_edit_until_all_candidate_lists_close},
+        {"Translated VK_PROCESSKEY reaches native EDIT", translated_process_key_reaches_native_edit},
+        {"Completing IME during Enter never reuses it for activation", completing_composition_during_enter_does_not_reuse_it_for_activation},
+        {"Enter without results reaches native EDIT", enter_without_results_reaches_native_edit},
+        {"IME owns navigation and Escape while edit has focus", input_method_owns_navigation_and_escape_until_focus_leaves_edit},
+        {"Key routing preserves ordinary keys and unrelated focus", search_key_routing_leaves_ordinary_keys_and_unrelated_focus_alone},
         {"Up from first returns to query", up_from_first_returns_to_query},
         {"Up from second selects previous", up_from_second_selects_previous},
         {"Down from last stays at last", down_from_last_stays_at_last},
