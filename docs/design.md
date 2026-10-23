@@ -11,9 +11,10 @@ for the new desktop's message loop and named pipe to acknowledge startup.
 It never terminates browser processes or browser-owned bridges. Numeric version
 comparison is identical for all builds; local builds normally use `999.0.N`.
 
-Desktop mode owns the in-memory tab index, tray icon, global hotkey and search
-window. Registration installs the same bytes as a per-user `GlintBridge.exe`
-under a SHA-256-versioned directory, avoiding replacement of an in-use image.
+Desktop mode owns the in-memory browser-tab and desktop-window indexes, tray
+icon, global hotkey and search window. Registration installs the same bytes as a
+per-user `GlintBridge.exe` under a SHA-256-versioned directory, avoiding
+replacement of an in-use image.
 Native Messaging mode is a browser-owned process started by Chrome or Edge; it
 copies browser frames to a per-user named pipe and copies responses back to
 browser stdout. The bridge never participates in the desktop single-instance
@@ -35,7 +36,33 @@ UTF-8 JSON implementation, incremental Native Messaging framing, and a
 connection-isolated tab index. The UI and bridge communicate through callbacks;
 index updates happen on pipe worker threads and UI refreshes are posted to the
 window message queue. Search is performed on a snapshot under the index mutex,
-so the UI thread never reads a pipe or waits on a browser.
+so the UI thread never reads a pipe or waits on a browser. Desktop window and
+UI Automation discovery runs on a background target worker, so search does not
+wait on native UI Automation calls.
+
+Desktop window search covers all eligible visible top-level windows as
+window-level results. Eligibility excludes Glint and Chrome/Edge windows, which
+are represented through extension connections, as well as hidden, cloaked, tool
+and system-shell windows. A window is identified by its visible top-level title
+and application name; activating a result restores a minimized window and
+requests foreground activation for the window. Unsupported applications
+therefore remain searchable without requiring an extension or application
+plugin.
+
+Windows 11 Notepad receives additional tab-level indexing only when its UI
+Automation tree exposes tab entries as `TabItem` controls with
+`SelectionItemPattern`. Glint requires a complete set of uniquely identified,
+titled and selectable tab entries before replacing the single Notepad window
+result with individual tab results. It uses the selection pattern to choose the
+requested tab before activating and foregrounding its window. A retryable UIA
+scan or activation failure recreates the client once and retries the bounded
+operation. Transient system hosts such as `TextInputHost.exe` are excluded while
+`ApplicationFrameWindow` and otherwise eligible `CoreWindow` surfaces remain
+available as desktop windows. Sublime Text's
+custom-drawn tabs are not exposed through UI Automation, so Sublime contributes
+one window-level result rather than tab results. Glint does not ship a Sublime
+plugin, read arbitrary application content, or claim generic
+arbitrary-application tab expansion.
 
 The named-pipe server and native bridge open their duplex desktop handles with
 `FILE_FLAG_OVERLAPPED`. Each read and write owns an independent event and
@@ -109,9 +136,11 @@ without persisting it. The recorder handles Alt system messages and forwards
 the current registered shortcut's WM_HOTKEY notification into the field rather
 than reopening search. Obsolete shortcut messages are rejected by ID and binding.
 
-The first release supports only Chrome/Edge tabs supplied by the MV3
-extension. Registration writes HKCU Native Messaging host keys for the requested
-browser or browsers and generates host manifests with explicit allowed origins.
+Chrome and Edge tab results are supplied by the MV3 extension. Desktop windows
+are indexed directly by the desktop process, with Notepad tabs added only under
+the UI Automation condition above. Registration writes HKCU Native Messaging
+host keys for the requested browser or browsers and generates host manifests
+with explicit allowed origins.
 All runtime dependencies are Windows system DLLs; Release uses `/MT`.
 
 ## Browser connection guide

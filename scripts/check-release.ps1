@@ -5,8 +5,8 @@
 
 .DESCRIPTION
   The default sequence configures and builds the Release preset, runs CTest and
-  the extension tests, exercises desktop/bridge lifecycle recovery, and checks
-  the final executable's imports, then runs package-release.ps1 to synchronize
+  website and extension tests, exercises desktop/bridge lifecycle recovery,
+  and checks the final executable's imports, then runs package-release.ps1 to synchronize
   dist/ and Glint-win-x64.zip. Requires PowerShell 7 or later, including the
   runtime APIs used by packaging.
 
@@ -170,6 +170,10 @@ if (-not $SkipExtensionTests) {
       Action = { Invoke-NativeCommand -FilePath 'npm' -Arguments @('--prefix', 'extension', 'test') }
     })
 }
+$steps.Add([pscustomobject]@{
+    Name = 'Run website tests'
+    Action = { Invoke-NativeCommand -FilePath 'node' -Arguments @('--test', 'site/i18n.test.js', 'site/app.test.js') }
+  })
 if (-not $SkipLifecycle) {
   $steps.Add([pscustomobject]@{
       Name = 'Verify desktop and bridge lifecycle'

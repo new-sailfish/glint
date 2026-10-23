@@ -492,6 +492,11 @@ std::vector<ConnectionInfo> TabIndex::connections() const {
 }
 std::size_t TabIndex::connection_count() const { std::lock_guard lock(mutex_); return states_.size(); }
 std::size_t TabIndex::tab_count() const { std::lock_guard lock(mutex_); std::size_t count = 0; for (const auto& state_entry : states_) count += state_entry.second.tabs.size(); return count; }
-bool TabIndex::contains(TabKey key) const { std::lock_guard lock(mutex_); const auto it = states_.find(key.connection_id); return it != states_.end() && it->second.tabs.contains(key.tab_id); }
+bool TabIndex::contains(TabKey key) const {
+    if (key.source != TabSource::Browser) return false;
+    std::lock_guard lock(mutex_);
+    const auto it = states_.find(key.connection_id);
+    return it != states_.end() && it->second.tabs.contains(key.tab_id);
+}
 
 } // namespace glint

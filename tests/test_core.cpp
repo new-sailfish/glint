@@ -47,6 +47,9 @@ int main() {
         assert(index.apply(22, Json::Object{{"type", "snapshot"}, {"version", 1}, {"tabs", Json::Array{
             tab(1, "Mail", "https://mail.test")}}}));
         assert(index.connection_count() == 2 && index.tab_count() == 3);
+        assert(index.contains({11, 1, glint::TabSource::Browser, L""}));
+        assert(!index.contains({11, 1, glint::TabSource::Window, L"w:11:1"}));
+        assert(!index.contains({11, 1, glint::TabSource::UiTab, L"u:11:1"}));
         assert(index.search(L"DOC").size() == 1);
         assert(index.search(L"中文").size() == 1);
         assert(index.search(L"").size() == 3);

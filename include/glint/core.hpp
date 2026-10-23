@@ -95,9 +95,15 @@ std::string wide_to_utf8(std::wstring_view text);
 
 using ConnectionId = std::uint64_t;
 
+// Browser tabs arrive from the native-messaging bridge. Native entries are
+// supplied by the desktop process and never enter the browser TabIndex.
+enum class TabSource { Browser, Window, UiTab };
+
 struct TabKey {
     ConnectionId connection_id = 0;
     std::int64_t tab_id = 0;
+    TabSource source = TabSource::Browser;
+    std::wstring target_id;
     bool operator==(const TabKey&) const = default;
 };
 
@@ -111,6 +117,12 @@ struct Tab {
     std::wstring profile_label;
     bool active = false;
     bool pinned = false;
+    std::wstring application;
+    std::uintptr_t window_handle = 0;
+    std::uint32_t process_id = 0;
+    std::uint64_t process_creation_time = 0;
+    std::vector<int> runtime_id;
+    bool operator==(const Tab&) const = default;
 };
 
 struct ConnectionInfo {

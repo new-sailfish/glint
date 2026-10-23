@@ -8,7 +8,8 @@ param(
 
 <#
 .SYNOPSIS
-  Run the CTest and browser-extension tests related to the current change.
+  Run the CTest, website, and browser-extension tests related to the current
+  change.
 
 .DESCRIPTION
   The default change set is the merge-base diff against the remote default
@@ -36,7 +37,7 @@ $repositoryDirectory = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptR
 
 # Keep this smoke set intentionally small, while covering the protocol/core,
 # shared Windows bridge code, and extension packaged-file/identity contract.
-$smokeCTest = @('glint_core', 'glint_bridge_installation')
+$smokeCTest = @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation')
 $smokeExtension = @('test/manifest.test.js')
 # These source names make -List useful without requiring a configured build.
 # Full CTest execution is deliberately unfiltered so newly registered tests
@@ -47,6 +48,9 @@ $allCTest = @([regex]::Matches($cmakeSource, '(?i)add_test\s*\(\s*NAME\s+([^\s\)
 $extensionTestDirectory = Join-Path $repositoryDirectory 'extension/test'
 $allExtension = @(Get-ChildItem -LiteralPath $extensionTestDirectory -Filter '*.test.js' -File |
   ForEach-Object { 'test/' + $_.Name } | Sort-Object -Unique)
+$siteTestDirectory = Join-Path $repositoryDirectory 'site'
+$allWebsite = @(Get-ChildItem -LiteralPath $siteTestDirectory -Filter '*.test.js' -File |
+  ForEach-Object { 'site/' + $_.Name } | Sort-Object -Unique)
 $maxMappedTargets = 4
 
 # Test source/header ownership follows the existing CMake targets. A source
@@ -76,6 +80,7 @@ $testByFile = @{
   'src/language_sync.hpp' = @('glint_language', 'glint_native_host')
   'tests/test_core.cpp' = @('glint_core')
   'tests/test_setup_progress.cpp' = @('glint_setup_progress')
+  'tests/test_desktop_targets.cpp' = @('glint_desktop_targets')
   'tests/test_connection_overview.cpp' = @('glint_connection_overview')
   'tests/test_search_navigation.cpp' = @('glint_search_navigation')
   'tests/test_search_caption.cpp' = @('glint_search_caption')
@@ -91,9 +96,11 @@ $testByFile = @{
   'tests/test_browser_launch.cpp' = @('glint_browser_launch')
   'tests/test_setup_window.cpp' = @('glint_setup_window')
 
-  'src/core.cpp' = @('glint_core', 'glint_pipe_server', 'glint_foreground_permission', 'glint_native_host', 'glint_registration', 'glint_bridge_installation', 'glint_setup_window')
+  'src/core.cpp' = @('glint_core', 'glint_desktop_targets', 'glint_pipe_server', 'glint_foreground_permission', 'glint_native_host', 'glint_registration', 'glint_bridge_installation', 'glint_setup_window')
   'src/search_navigation.hpp' = @('glint_search_navigation')
   'src/search_results.hpp' = @('glint_search_navigation')
+  'src/desktop_targets.cpp' = @('glint_desktop_targets')
+  'src/desktop_targets.hpp' = @('glint_desktop_targets')
   'src/search_caption.hpp' = @('glint_search_caption')
   'src/hotkey.cpp' = @('glint_hotkey', 'glint_hotkey_window')
   'src/hotkey.hpp' = @('glint_hotkey', 'glint_hotkey_window')
@@ -141,6 +148,14 @@ $extensionByFile = @{
   'extension/test/background.test.js' = @('test/background.test.js')
   'extension/test/manifest.test.js' = @('test/manifest.test.js')
   'extension/test/options.test.js' = @('test/options.test.js')
+}
+
+$websiteByFile = @{
+  'site/i18n.js' = @('site/i18n.test.js', 'site/app.test.js')
+  'site/app.js' = @('site/app.test.js')
+  'site/index.html' = @('site/i18n.test.js')
+  'site/i18n.test.js' = @('site/i18n.test.js')
+  'site/app.test.js' = @('site/app.test.js')
 }
 
 function Normalize-Path([string]$Path) {
@@ -202,13 +217,16 @@ function Add-Selection([hashtable]$Selection, [string]$Name, [string]$Reason) {
 $changedFiles = @(Get-ChangedFiles | Sort-Object -Unique)
 $selectedCTest = @{}
 $selectedExtension = @{}
+$selectedWebsite = @{}
 foreach ($test in $smokeCTest) { Add-Selection $selectedCTest $test 'smoke baseline' }
 foreach ($test in $smokeExtension) { Add-Selection $selectedExtension $test 'smoke baseline' }
 
 $fullCTest = $false
 $fullExtension = $false
+$fullWebsite = $false
 $fullCTestReason = ''
 $fullExtensionReason = ''
+$fullWebsiteReason = ''
 foreach ($file in $changedFiles) {
   $normalized = Normalize-Path $file
   if ($normalized -match '^(CMakeLists\.txt|CMakePresets\.json|VERSION|app\.manifest(\.in)?)$' -or
@@ -263,6 +281,19 @@ foreach ($file in $changedFiles) {
     continue
   }
 
+  if ($websiteByFile.ContainsKey($normalized)) {
+    foreach ($test in @($websiteByFile[$normalized])) {
+      Add-Selection $selectedWebsite $test "maps $normalized to website tests"
+    }
+    continue
+  }
+
+  if ($normalized -like 'site/*') {
+    $fullWebsite = $true
+    if (-not $fullWebsiteReason) { $fullWebsiteReason = "unmapped website file $normalized; full website set" }
+    continue
+  }
+
   if ($testByFile.ContainsKey($normalized)) {
     $mapped = @($testByFile[$normalized])
     if ($mapped.Count -gt $maxMappedTargets) {
@@ -297,15 +328,22 @@ if ($fullExtension) {
   $selectedExtension = @{}
   foreach ($test in $allExtension) { Add-Selection $selectedExtension $test $fullExtensionReason }
 }
+if ($fullWebsite) {
+  $selectedWebsite = @{}
+  foreach ($test in $allWebsite) { Add-Selection $selectedWebsite $test $fullWebsiteReason }
+}
 
 $ctestNames = @($selectedCTest.Keys | Sort-Object)
 $extensionTests = @($selectedExtension.Keys | Sort-Object)
+$websiteTests = @($selectedWebsite.Keys | Sort-Object)
 if ($List) {
   Write-Output ('Changed files: ' + ($(if ($changedFiles.Count) { $changedFiles -join ', ' } else { '(none)' })))
   Write-Output 'CTest:'
   foreach ($test in $ctestNames) { Write-Output ("  {0}  ({1})" -f $test, $selectedCTest[$test]) }
   Write-Output 'Extension:'
   foreach ($test in $extensionTests) { Write-Output ("  {0}  ({1})" -f $test, $selectedExtension[$test]) }
+  Write-Output 'Website:'
+  foreach ($test in $websiteTests) { Write-Output ("  {0}  ({1})" -f $test, $selectedWebsite[$test]) }
   return
 }
 
@@ -333,6 +371,10 @@ if ($ctestNames.Count -gt 0) {
 if ($extensionTests.Count -gt 0) {
   Write-Output ('Running extension tests: ' + ($extensionTests -join ', '))
   Invoke-Checked 'node' (@('--test') + $extensionTests) (Join-Path $repositoryDirectory 'extension')
+}
+if ($websiteTests.Count -gt 0) {
+  Write-Output ('Running website tests: ' + ($websiteTests -join ', '))
+  Invoke-Checked 'node' (@('--test') + $websiteTests) $repositoryDirectory
 }
 
 Write-Output ('Changed tests passed: {0} CTest target(s), {1} extension test file(s).' -f $ctestNames.Count, $extensionTests.Count)

@@ -2,8 +2,9 @@
 
 [English overview and installation](../README.md) · [中文概览与安装](../README.zh-CN.md) · [Development guide](development.md)
 
-This guide covers everyday controls, connection repair, updates and removal.
-For first-time setup, follow the [five-stage installation guide](../README.md#connect-each-browser-profile).
+This guide covers browser configuration, desktop-window search, everyday
+controls, connection repair, updates and removal. For browser setup, follow the
+[five-stage installation guide](../README.md#connect-each-browser-profile).
 Button names below match the English interface.
 
 ## Language settings
@@ -41,8 +42,33 @@ read the browser's own profile display name. The full panel is also available
 under the extension's **Details → Extension options** entry.
 
 Installing or updating the extension does not open an extra browser tab.
-Closing its popup does not disconnect it. Once setup is complete, browser and
-desktop restarts automatically reconnect and rebuild the tab index.
+Closing its popup does not disconnect it. Once setup is complete, browser
+extensions reconnect after a browser or desktop restart, and the desktop rebuilds
+its browser-tab and window indexes.
+
+## Desktop windows and Notepad tabs
+
+Glint also indexes all eligible visible top-level desktop windows without an
+extension. Normal visible, titled top-level windows from applications other
+than Chrome and Edge are candidates; hidden, cloaked, tool and system-shell
+windows are not separate results. An application that does not expose supported
+individual tabs appears as one window-level result carrying its visible
+top-level title. This applies separately to each eligible window. Selecting that
+result restores the window if it is minimized and brings it to the foreground.
+
+On Windows 11, when Notepad exposes its tabs through UI Automation as `TabItem`
+controls with `SelectionItemPattern`, Glint replaces the single Notepad window
+result with those tabs and selects the tab you activate. Window-level activation
+then restores the Notepad window if needed and brings it forward. If Notepad does
+not expose a complete set of selectable tab items, it remains a window-level
+result.
+
+Sublime Text draws its tabs itself and does not expose those tabs through UI
+Automation. Sublime therefore appears only as a window-level result. Other
+applications also remain window-level; Glint does not add tab-level search for
+another application merely because it exposes some UI Automation tree. Glint
+does not install a Sublime plugin, inspect arbitrary application content, or
+offer general per-tab search for arbitrary UI Automation applications.
 
 ### Extension folder selection
 
@@ -69,15 +95,17 @@ chooser. If browser launch fails, open the target profile yourself and enter
 
 ## Search and keyboard controls
 
-Search matches a title or URL fragment in the currently synchronized open tabs.
-Selecting a result activates that tab in its current window. Minimized windows
-are restored; maximized windows keep their state. Glint checks the resulting
-focus and reports activation failure if the browser cannot bring the target
+Search matches a title or URL fragment in connected browser tabs. Desktop window
+results match their title or application name, and supported Notepad tabs match
+their tab title or containing window title. Selecting a result activates that
+browser tab, Notepad tab, or desktop window in its current window. Minimized
+windows are restored; maximized windows keep their state. Glint checks the
+resulting focus and reports activation failure if the target cannot be brought
 forward.
 
 Opening search or changing the query selects the first result while keeping the
-caret in the search field. Press Enter to switch immediately. Background tab
-updates preserve your selected tab when it still matches; if it disappears,
+caret in the search field. Press Enter to switch immediately. Background
+updates preserve your selected result when it still matches; if it disappears,
 the first remaining result is selected. With no results, Enter does nothing.
 While an input method is composing text or showing candidates, its keys stay
 with the search field, so confirming a candidate does not switch tabs.
@@ -89,7 +117,7 @@ with the search field, so confirming a candidate does not switch tabs.
 | Search field | `↑` | Keep focus in the field. |
 | First result | `↑`, `Home` or `PageUp` | Return to the search field, preserving text and caret. |
 | Other results | Arrow keys, `Home` and `PageUp` | Use normal list navigation. |
-| Search field or selected result | `Enter` | Activate the selected tab, unless an input method is handling the key. |
+| Search field or selected result | `Enter` | Activate the selected browser tab, supported Notepad tab, or desktop window, unless an input method is handling the key. |
 | Search window | `Esc` | Hide search. |
 | Search window | `Alt+F4` or close button | Hide search; Glint remains in the tray. |
 | Search window | `Alt+Space` or right-click the title bar | Open the window menu. |
@@ -268,12 +296,16 @@ through the repair flow.
 
 ## Permissions and stored data
 
-The extension requests `tabs`, `nativeMessaging` and `storage`. It reads tab
-metadata, including title, URL, tab/window IDs and activation state, without
-injecting scripts or reading page contents. Local extension storage holds its
-profile identity, optional label and language preference. The extension UI loads no external scripts,
-fonts or other dependencies. The desktop tab index is memory-only and is rebuilt
-from current tabs after reconnecting.
+The extension requests `tabs`, `nativeMessaging` and `storage`. It reads browser
+tab metadata, including title, URL, tab/window IDs and activation state, without
+injecting scripts or reading page contents. Desktop windows contribute their
+visible top-level titles and application names; Notepad tabs contribute only
+the UI Automation tab metadata needed for search and selection. Glint does not
+read arbitrary application content. Local extension storage holds its profile identity,
+optional label and language preference. The extension UI loads no external
+scripts, fonts or other dependencies. The browser tab and window indexes are
+memory-only and are rebuilt from current tabs and windows after reconnecting or
+restarting.
 
 ## Uninstall
 

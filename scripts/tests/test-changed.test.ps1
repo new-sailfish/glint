@@ -15,7 +15,7 @@ $failures = [Collections.Generic.List[string]]::new()
 $passed = 0
 $caseNumber = 0
 $ctestNames = @(
-  'glint_core', 'glint_setup_progress', 'glint_connection_overview', 'glint_language',
+  'glint_core', 'glint_setup_progress', 'glint_desktop_targets', 'glint_connection_overview', 'glint_language',
   'glint_search_navigation', 'glint_search_caption', 'glint_hotkey', 'glint_hotkey_window',
   'glint_pipe_server', 'glint_foreground_permission', 'glint_native_host',
   'glint_registration', 'glint_bridge_installation', 'glint_extension_identity',
@@ -24,6 +24,7 @@ $ctestNames = @(
   'glint_update_controller', 'glint_update_window', 'glint_update_process'
 )
 $extensionNames = @('background-core', 'background', 'manifest', 'options')
+$siteNames = @('i18n', 'app')
 $wrapper = Join-Path $temporaryRoot 'invoke-selector.ps1'
 @'
 param([string]$Settings)
@@ -80,6 +81,7 @@ function New-Fixture {
   Copy-Item -LiteralPath $selector -Destination (Join-Path $script:fixture 'scripts/test-changed.ps1')
   Copy-Item -LiteralPath (Join-Path $sourceRoot 'CMakeLists.txt') -Destination $script:fixture
   foreach ($name in $extensionNames) { Write-FixtureFile "extension/test/$name.test.js" }
+  foreach ($name in $siteNames) { Write-FixtureFile "site/$name.test.js" }
   Write-FixtureFile 'src/hotkey.cpp' 'original hotkey source'
   Write-FixtureFile 'src/setup_window.cpp' 'original setup source'
   Write-FixtureFile 'docs/notes.md' 'original notes'
@@ -159,50 +161,66 @@ function Test-Case([string]$Name, [scriptblock]$Body) {
 try {
   Test-Case 'update controller selects scheduling and controller regression tests' {
     $result = Invoke-Selector @{ List = $true; Files = @('src/update_controller.cpp') }
-    Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_update_controller', 'glint_update_schedule')
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_update_controller', 'glint_update_schedule')
     Assert-Contains $result.Output 'maps src/update_controller.cpp'
   }
   Test-Case 'update downloader selects feed and installer integrity tests' {
     $result = Invoke-Selector @{ List = $true; Files = @('src/update_feed.cpp') }
-    Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_update_feed', 'glint_update_install', 'glint_update_process')
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_update_feed', 'glint_update_install', 'glint_update_process')
   }
   Test-Case 'baseline includes core and bridge smoke checks' {
     $result = Invoke-Selector
-    Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation')
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation')
     Assert-Tests $result 'Extension' @('test/manifest.test.js')
     Assert-Contains $result.Output 'smoke baseline'
+  }
+  Test-Case 'shared core changes retain desktop target coverage' {
+    $result = Invoke-Selector @{ List = $true; Files = @('src/core.cpp') }
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation')
+    Assert-Contains $result.Output 'smoke fallback'
+  }
+  Test-Case 'website language changes select their browserless tests' {
+    foreach ($case in @(
+        @{ File = 'site/i18n.js'; Tests = @('site/i18n.test.js', 'site/app.test.js') },
+        @{ File = 'site/app.js'; Tests = @('site/app.test.js') },
+        @{ File = 'site/index.html'; Tests = @('site/i18n.test.js') })) {
+      $result = Invoke-Selector @{ List = $true; Files = @($case.File) }
+      Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation')
+      Assert-Tests $result 'Website' $case.Tests
+      Assert-Contains $result.Output "maps $($case.File) to website tests"
+    }
   }
   Test-Case 'explicit mapping is normalized, sorted, and deterministic' {
     $a = Invoke-Selector @{ List = $true; Files = @('.\src\hotkey.cpp', 'tests/test_registration.cpp', 'src/hotkey.cpp') }
     $b = Invoke-Selector @{ List = $true; Files = @('tests/test_registration.cpp,src/hotkey.cpp') }
-    Assert-Tests $a 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_hotkey', 'glint_hotkey_window', 'glint_registration')
+    Assert-Tests $a 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_hotkey', 'glint_hotkey_window', 'glint_registration')
     Assert-True ($a.Output -eq $b.Output) 'File ordering changed the selected output.'
     Assert-Contains $a.Output 'maps src/hotkey.cpp'
   }
   Test-Case 'search interaction helpers select their native regression tests' {
     foreach ($file in @('src/search_results.hpp', 'src/search_navigation.hpp', 'tests/test_search_navigation.cpp')) {
       $result = Invoke-Selector @{ List = $true; Files = @($file) }
-      Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_search_navigation')
+      Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_search_navigation')
     }
     foreach ($file in @('src/search_caption.hpp', 'tests/test_search_caption.cpp')) {
       $result = Invoke-Selector @{ List = $true; Files = @($file) }
-      Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_search_caption')
+      Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_search_caption')
     }
   }
   Test-Case 'UI theme and illustration select the setup window tests' {
     $result = Invoke-Selector @{ List = $true; Files = @('src/ui_theme.hpp', 'src/setup_illustration.hpp') }
-    Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_hotkey_window', 'glint_setup_window', 'glint_search_caption')
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_hotkey_window', 'glint_setup_window', 'glint_search_caption')
   }
   Test-Case 'setup progress and overview headers select their compiled consumers' {
     $result = Invoke-Selector @{ List = $true; Files = @('src/connection_overview.hpp') }
-    Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_connection_overview', 'glint_setup_progress', 'glint_setup_window')
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_connection_overview', 'glint_setup_progress', 'glint_setup_window')
     $result = Invoke-Selector @{ List = $true; Files = @('src/setup_progress.hpp') }
-    Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_setup_progress', 'glint_setup_window')
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_setup_progress', 'glint_setup_window')
   }
   Test-Case 'shared Windows and bridge files retain bridge smoke coverage' {
     foreach ($file in @('src/win_common.hpp', 'src/bridge_installation.cpp')) {
       $result = Invoke-Selector @{ List = $true; Files = @($file) }
-      Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation')
+      Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation')
       Assert-Contains $result.Output 'smoke fallback'
     }
   }
@@ -228,18 +246,18 @@ try {
   Test-Case 'embedded extension runtime and icons select native bundle tests' {
     foreach ($file in @('extension/options.js', 'extension/icon-128.png', 'extension/_locales/zh_CN/messages.json')) {
       $result = Invoke-Selector @{ List = $true; Files = @($file) }
-      Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_extension_bundle')
+      Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_extension_bundle')
       Assert-Contains $result.Output "embedded extension resource $file"
     }
   }
   Test-Case 'language changes include resolver and native UI regression tests' {
     $result = Invoke-Selector @{ List = $true; Files = @('src/language.hpp') }
-    Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_language',
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_language',
       'glint_connection_overview', 'glint_setup_window', 'glint_hotkey_window')
   }
   Test-Case 'language sync selects message contract and relay tests' {
     $result = Invoke-Selector @{ List = $true; Files = @('src/language_sync.hpp') }
-    Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_language', 'glint_native_host')
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_language', 'glint_native_host')
   }
   Test-Case 'removed extension tests select the remaining extension suite' {
     Remove-Item -LiteralPath (Join-Path $fixture 'extension/test/options.test.js')
@@ -277,7 +295,7 @@ try {
     Assert-Contains $result.Commands '--preset release'
     Assert-Contains $result.Commands '--no-tests=error'
     Assert-True (-not $result.Commands.Contains('(?:')) 'CTest regular expressions cannot use noncapturing groups.'
-    Assert-Contains $result.Commands '--tests-regex ^(glint_bridge_installation|glint_core|glint_hotkey|glint_hotkey_window)$'
+    Assert-Contains $result.Commands '--tests-regex ^(glint_bridge_installation|glint_core|glint_desktop_targets|glint_hotkey|glint_hotkey_window)$'
   }
   Test-Case 'full CTest execution has no restrictive test regex' {
     $result = Invoke-Selector @{ Files = @('tests/test_new_feature.cpp') }
@@ -373,7 +391,7 @@ try {
   }
   Test-Case 'a clean comparison runs the baseline without scalar errors' {
     $result = Invoke-Selector @{ List = $true; Base = 'fixture-base' }
-    Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation')
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation')
     Assert-Contains $result.Output 'Changed files: (none)'
   }
   Test-Case 'Git selection works from outside the repository' {

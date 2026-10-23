@@ -19,6 +19,11 @@ public:
                                  0, 0, 480, 300, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
         require(parent_ != nullptr, "create test-owned parent window");
         try {
+            // Child controls cannot receive focus while their top-level parent
+            // is hidden. Keep the test window non-activating, then make it the
+            // active window for this thread without stealing foreground focus.
+            ShowWindow(parent_, SW_SHOWNOACTIVATE);
+            SetActiveWindow(parent_);
             edit = CreateWindowExW(0, L"EDIT", L"query text", WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
                                    0, 0, 480, 30, parent_, nullptr, GetModuleHandleW(nullptr), nullptr);
             list = CreateWindowExW(0, WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | LVS_REPORT,
@@ -168,6 +173,39 @@ void background_refresh_preserves_tab_identity_after_reordering() {
         require(GetFocus() == (edit_focus ? controls.edit : controls.list), "background refresh retains control focus");
         controls.require_edit_unchanged(3, 3);
     }
+}
+
+void background_refresh_keeps_native_sources_distinct() {
+    SearchControls controls(0);
+    std::vector<glint::Tab> initial;
+    for (const auto& key : {
+             glint::TabKey{1, 10, glint::TabSource::Browser, L""},
+             glint::TabKey{0, 10, glint::TabSource::Window, L"w:window-a"},
+             glint::TabKey{0, 10, glint::TabSource::Window, L"w:window-b"},
+             glint::TabKey{0, 10, glint::TabSource::UiTab, L"u:tab-a"}}) {
+        glint::Tab row;
+        row.key = key;
+        row.title = key.target_id.empty() ? L"Browser" : key.target_id;
+        initial.push_back(std::move(row));
+    }
+    controls.refresh(L"query", initial);
+    controls.select(2);
+    controls.focus(controls.list);
+
+    std::vector<glint::Tab> reordered;
+    for (const auto& key : {
+             glint::TabKey{0, 10, glint::TabSource::UiTab, L"u:tab-a"},
+             glint::TabKey{0, 10, glint::TabSource::Window, L"w:window-b"},
+             glint::TabKey{0, 10, glint::TabSource::Window, L"w:window-a"},
+             glint::TabKey{1, 10, glint::TabSource::Browser, L""}}) {
+        glint::Tab row;
+        row.key = key;
+        row.title = key.target_id.empty() ? L"Browser" : key.target_id;
+        reordered.push_back(std::move(row));
+    }
+    controls.refresh(L"query", reordered);
+    controls.require_selection(1);
+    require(GetFocus() == controls.list, "native result refresh retains list focus");
 }
 
 void changed_query_and_explicit_reset_choose_first() {
@@ -559,6 +597,7 @@ int main() {
     const std::pair<const char*, void (*)()> tests[] = {
         {"Refresh selects first while preserving edit focus and caret", refresh_selects_first_without_moving_edit_caret},
         {"Background refresh preserves full TabKey after reordering", background_refresh_preserves_tab_identity_after_reordering},
+        {"Background refresh keeps native sources distinct", background_refresh_keeps_native_sources_distinct},
         {"Changed query and explicit reset choose first", changed_query_and_explicit_reset_choose_first},
         {"Removed selected tab falls back to first", removed_selection_falls_back_to_first},
         {"Empty refresh clears selection and restores query focus", empty_refresh_clears_selection_and_returns_list_focus_to_edit},

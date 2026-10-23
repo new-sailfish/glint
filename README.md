@@ -2,9 +2,10 @@
   <img src="docs/assets/glint-logo.svg" alt="Glint logo" width="230" height="60">
 </p>
 
-# Glint · Cross-browser tab search
+# Glint · Desktop tab and window search
 
-Search open Chrome and Edge tabs by title or URL on Windows 10/11 x64.
+Find open Chrome and Edge tabs, eligible visible top-level Windows desktop
+windows, and supported Notepad tabs from one search window on Windows 10/11 x64.
 
 [![Latest release](https://img.shields.io/github/v/release/new-sailfish/glint?label=release&color=1677ff)](https://github.com/new-sailfish/glint/releases/latest)
 ![Windows 10/11 x64](https://img.shields.io/badge/Windows-10%2F11_x64-1677ff)
@@ -16,14 +17,14 @@ Search open Chrome and Edge tabs by title or URL on Windows 10/11 x64.
 
 ## Project background
 
-A page may be open in Chrome or Edge, in another window, or under a different
-work or personal profile. Remembering part of its title is often easier than
-remembering where it is. Switching between windows to inspect their tab bars
-adds another step to finding it.
+A page or document may be open in Chrome or Edge, in another application
+window, or under a different browser profile. Remembering part of its title is
+often easier than remembering where it is. Switching between windows to inspect
+their tab bars adds another step to finding it.
 
-Glint collects the open tabs from the browser profiles you connect into one
-Windows search window. Search for a title or URL, then return directly to the
-existing tab and its window.
+Glint brings open browser tabs into one Windows search window, then extends the
+same list to all eligible visible top-level desktop windows. Search for a title
+or URL, then return to the existing tab or application window.
 
 ![Illustration of tabs spread across browsers, windows and profiles, brought into one Glint search](docs/assets/tab-overload-en.svg)
 
@@ -31,8 +32,8 @@ existing tab and its window.
 
 Press **Ctrl+Shift+Space** and type part of a title or URL. The first result is
 selected automatically; press **Enter** to switch, or use the arrow keys to choose
-another result. Glint activates that tab and brings its browser window forward,
-restoring the window if it is minimized.
+another result. Glint activates the selected browser tab or desktop window and
+brings it forward, restoring the window if it is minimized.
 
 ![Glint search window with sample tab data from Chrome and Edge profiles](docs/assets/search-en.png)
 
@@ -40,15 +41,21 @@ restoring the window if it is minimized.
 
 | Capability | Behavior |
 | --- | --- |
-| Search across profiles | One result list for connected Chrome and Edge profiles, including their separate windows. |
-| Keep results current | Tab creation, closure, title and URL changes, and moves between windows update the index. |
+| Search browsers and windows | One result list for connected Chrome and Edge profiles plus all eligible visible top-level windows from other applications. |
+| Search desktop windows | Each unsupported top-level window appears as a window-level result carrying its visible title. Selecting it restores a minimized window and brings it to the foreground. |
+| Search Windows 11 Notepad tabs | When Notepad exposes tabs through UI Automation as `TabItem` controls with `SelectionItemPattern`, those tabs replace the single Notepad window result and can be selected individually. Sublime Text's custom-drawn tabs stay window-level. |
+| Keep results current | Browser tab changes and desktop window creation, closure or title changes update the index. |
 | Use the keyboard | Global shortcut, arrow-key navigation, Enter to activate, and Esc to hide. The shortcut is configurable. |
 | See connection status | A profile table shows connection state and tab counts. Optional profile labels distinguish work and personal browsers. |
-| Work locally | Extensions send tab metadata through a local bridge. The desktop search index stays in memory and is rebuilt after restart. |
+| Work locally | Extensions send browser tab metadata through a local bridge; the desktop indexes native windows directly. The search index stays in memory and is rebuilt after restart. |
 
-The extension reads tab titles, URLs, IDs and activation state. It does not
-inject scripts or read page contents. Search covers open tabs supplied by
-connected profiles; it does not search bookmarks or browsing history.
+The extension reads browser tab titles, URLs, IDs and activation state. It does
+not inject scripts or read page contents. Desktop windows are indexed by their
+visible top-level titles and application names. Search covers connected browser
+tabs, eligible window results, and supported Notepad tabs; it does not search
+bookmarks or browsing history. Tab-level support beyond browsers is limited to
+Notepad tabs exposed through UI Automation; Glint does not add a Sublime plugin
+or expand arbitrary application UI trees into results.
 
 ## Install, configure and use
 
@@ -62,7 +69,8 @@ All connected browser extensions follow the desktop language immediately, includ
 
 Download [**Glint.exe**](https://github.com/new-sailfish/glint/releases/latest/download/Glint.exe),
 save it somewhere you will keep, and run it. Requirements are **Windows 10/11
-x64** and **Chrome or Edge 105+**. No administrator access or separate Visual C++
+x64**. Browser integration requires **Chrome or Edge 105+**; window search does
+not require a browser extension. No administrator access or separate Visual C++
 runtime installation is needed.
 
 The EXE contains the browser extension and prepares it automatically. The
@@ -113,10 +121,10 @@ address. For connection errors, use **Connection help** in the guide or follow t
 | Key or action | Result |
 | --- | --- |
 | `Ctrl+Shift+Space` | Open search using the default global shortcut. |
-| Type a title or URL fragment | Filter connected tabs and select the first result while keeping focus in the search field. |
+| Type a title or URL fragment | Filter connected browser tabs, desktop window titles and application names, and supported Notepad tabs, then select the first result while keeping focus in the search field. |
 | `↓` in the search field | Move focus to the first result. |
 | `↑` on the first result | Return to the search field, retaining its text and caret. |
-| `Enter` / `Esc` | Activate the selected tab / hide search. |
+| `Enter` / `Esc` | Activate the selected browser tab or desktop window, including a supported Notepad tab / hide search. |
 | Tray → **Configure shortcut** | Record and save a different shortcut. |
 
 <img src="docs/assets/hotkey-en.png" alt="Glint global shortcut settings" width="560">

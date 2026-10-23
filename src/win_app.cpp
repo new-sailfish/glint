@@ -5,6 +5,7 @@
 #include "glint/core.hpp"
 #include "glint_version.h"
 #include "connection_overview.hpp"
+#include "desktop_targets.hpp"
 #include "registration.hpp"
 #include "pipe_server.hpp"
 #include "extension_bundle.hpp"
@@ -29,6 +30,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -48,6 +50,7 @@ constexpr UINT WM_TRAY_EVENT = WM_APP + 2;
 constexpr UINT WM_SHOW_SETUP = WM_APP + 3;
 constexpr UINT WM_SHOW_SEARCH = WM_APP + 4;
 constexpr UINT WM_UPDATE_EVENT = WM_APP + 5;
+constexpr UINT WM_DESKTOP_EVENT = WM_APP + 6;
 constexpr UINT_PTR UPDATE_TIMER = 20;
 constexpr UINT_PTR STARTUP_TIMER = 21;
 constexpr UINT ID_TRAY_SHOW = 1001;
@@ -76,6 +79,7 @@ public:
         InitCommonControlsEx(&controls);
         if (!create_window()) return 1;
         pipe_.start();
+        desktop_targets_.start(window_, WM_DESKTOP_EVENT);
         const auto update_window = window_;
         updater_ = std::make_unique<update::Controller>(GLINT_VERSION_STRING,
             std::filesystem::path(win::local_app_data()) / L"Glint" / L"updates" / L"downloads",
@@ -151,6 +155,7 @@ private:
     TabIndex index_;
     ConnectionOverview connection_overview_;
     PipeServer pipe_;
+    desktop::DesktopTargetService desktop_targets_;
     std::vector<std::wstring> startup_warnings_;
     std::mutex event_mutex_;
     std::vector<std::pair<ConnectionId, std::string>> events_;
@@ -180,6 +185,7 @@ private:
         case WM_SHOW_SETUP: self->show_setup(); return 0;
         case WM_SHOW_SEARCH: self->show_search(); return 0;
         case WM_UPDATE_EVENT: self->update_changed(); return 0;
+        case WM_DESKTOP_EVENT: self->desktop_changed(); return 0;
         case WM_TIMER:
             if (wparam == ID_LANGUAGE_RETRY) { self->sync_extension_languages(); return 0; }
             if (wparam == UPDATE_TIMER && self->updater_) self->updater_->tick();
@@ -360,7 +366,7 @@ private:
             actual_width, actual_height, SWP_NOZORDER | SWP_NOACTIVATE);
         heading_ = CreateWindowExW(0, L"STATIC", L"Glint", WS_CHILD | WS_VISIBLE,
             0, 0, 0, 0, window_, nullptr, klass.hInstance, nullptr);
-        subtitle_ = CreateWindowExW(0, L"STATIC", i18n::text(L"Find your open tabs", L"标签页，随手找到"), WS_CHILD | WS_VISIBLE | SS_ENDELLIPSIS,
+        subtitle_ = CreateWindowExW(0, L"STATIC", i18n::text(L"Find open tabs and windows", L"查找打开的标签页和窗口"), WS_CHILD | WS_VISIBLE | SS_ENDELLIPSIS,
             0, 0, 0, 0, window_, nullptr, klass.hInstance, nullptr);
         settings_button_ = CreateWindowExW(0, L"BUTTON", i18n::text(L"Shortcut", L"快捷键设置"), WS_CHILD | WS_VISIBLE | WS_TABSTOP,
             0, 0, 0, 0, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_TRAY_HOTKEY)), klass.hInstance, nullptr);
@@ -373,7 +379,7 @@ private:
         if (!search_input_method_.attach(edit_)) return false;
         list_ = CreateWindowExW(0, WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS,
                                 12, 52, 860, 420, window_, nullptr, klass.hInstance, nullptr);
-        status_ = CreateWindowExW(0, L"STATIC", i18n::text(L"0 tabs", L"0 个标签页"), WS_CHILD | WS_VISIBLE | SS_ENDELLIPSIS,
+        status_ = CreateWindowExW(0, L"STATIC", i18n::text(L"0 results", L"0 个结果"), WS_CHILD | WS_VISIBLE | SS_ENDELLIPSIS,
                                    12, 478, 860, 24, window_, nullptr, klass.hInstance, nullptr);
         connection_summary_ = CreateWindowExW(0, L"STATIC", i18n::text(L"0 profiles connected", L"已连接 0 个配置文件"), WS_CHILD | WS_VISIBLE | SS_ENDELLIPSIS,
             12, 478, 680, 24, window_, nullptr, klass.hInstance, nullptr);
@@ -389,7 +395,7 @@ private:
         ui::style_button(setup_button_, true);
         ui::style_button(settings_button_);
         ui::style_button(language_button_);
-        SendMessageW(edit_, EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(i18n::text(L"Search tab titles or URLs", L"搜索标签页标题或网址")));
+        SendMessageW(edit_, EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(i18n::text(L"Search titles, URLs, or windows", L"搜索标题、网址或窗口")));
         ListView_SetExtendedListViewStyle(list_, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
         ListView_SetExtendedListViewStyle(connection_list_, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
         ListView_SetBkColor(list_, ui::surface());
@@ -398,7 +404,7 @@ private:
         ListView_SetBkColor(connection_list_, ui::surface());
         ListView_SetTextBkColor(connection_list_, ui::surface());
         ListView_SetTextColor(connection_list_, ui::ink());
-        const wchar_t* headers[] = {i18n::text(L"Title", L"标题"), i18n::text(L"URL", L"网址"), i18n::text(L"Browser / Profile", L"浏览器 / 配置")};
+        const wchar_t* headers[] = {i18n::text(L"Title", L"标题"), i18n::text(L"URL / window", L"网址 / 窗口"), i18n::text(L"Source", L"来源")};
         const int widths[] = {280, 420, 170};
         for (int i = 0; i != 3; ++i) { LVCOLUMNW column{LVCF_TEXT | LVCF_WIDTH}; column.pszText = const_cast<LPWSTR>(headers[i]); column.cx = widths[i]; ListView_InsertColumn(list_, i, &column); }
         const wchar_t* connection_headers[] = {i18n::text(L"Browser / Profile", L"浏览器 / 配置"), i18n::text(L"Status", L"连接状态"), i18n::text(L"Tabs", L"标签页")};
@@ -413,7 +419,7 @@ private:
             startup_warnings_.push_back(hotkey_error + i18n::text(L"\nChoose “Configure shortcut” in the tray menu to change it.", L"\n可从托盘打开“配置全局热键”修改。"));
         }
         tray_.cbSize = sizeof(tray_); tray_.hWnd = window_; tray_.uID = 1; tray_.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP; tray_.uCallbackMessage = WM_TRAY_EVENT;
-        tray_.hIcon = ui::icon(klass.hInstance); wcscpy_s(tray_.szTip, (std::wstring(L"Glint " GLINT_VERSION_WSTRING) + i18n::text(L" · Tab search", L" · 标签页搜索")).c_str()); add_tray();
+        tray_.hIcon = ui::icon(klass.hInstance); wcscpy_s(tray_.szTip, (std::wstring(L"Glint " GLINT_VERSION_WSTRING) + i18n::text(L" · Tab and window search", L" · 标签页与窗口搜索")).c_str()); add_tray();
         layout();
         return true;
     }
@@ -571,9 +577,8 @@ private:
             bounds.top += px(42); bounds.left += px(24); bounds.right -= px(24);
             SetTextColor(draw.nmcd.hdc, ui::muted()); SetBkMode(draw.nmcd.hdc, TRANSPARENT);
             const auto previous = SelectObject(draw.nmcd.hdc, font_);
-            const wchar_t* message = !query_empty_ ? i18n::text(L"No matching tabs.\nTry another title keyword or URL.", L"没有找到匹配的标签页。\n换个标题关键词，或试试网址。")
-                : connection_overview_.connected_count() ? i18n::text(L"No open tabs in the connected browsers.", L"当前浏览器还没有打开标签页。")
-                : i18n::text(L"Connect Chrome or Edge to see your tabs here.", L"连接 Chrome 或 Edge，让标签页出现在这里。");
+            const wchar_t* message = !query_empty_ ? i18n::text(L"No matching tabs or windows.\nTry another title or window keyword.", L"没有找到匹配的标签页或窗口。\n换个标题或窗口关键词试试。")
+                : i18n::text(L"No browser tabs or desktop windows are currently available.", L"当前没有可搜索的浏览器标签页或桌面窗口。");
             DrawTextW(draw.nmcd.hdc, message, -1, &bounds, DT_CENTER | DT_TOP | DT_WORDBREAK | DT_NOPREFIX);
             SelectObject(draw.nmcd.hdc, previous);
         }
@@ -655,6 +660,25 @@ private:
         if (state.exit_to_install) DestroyWindow(window_);
     }
 
+    void desktop_changed() {
+        const auto errors = desktop_targets_.take_activation_errors();
+        bool revealed = false;
+        if (!errors.empty()) {
+            if (!IsWindowVisible(window_)) {
+                show_search();
+                revealed = true;
+            }
+            std::wstring details;
+            for (const auto& error : errors) {
+                if (!details.empty()) details += L"\r\n";
+                details += error;
+            }
+            MessageBoxW(window_, (i18n::text(L"Could not switch to the selected item:\r\n",
+                L"无法切换到所选项目：\r\n") + details).c_str(), L"Glint", MB_OK | MB_ICONWARNING);
+        }
+        if (!revealed && IsWindowVisible(window_)) refresh_results();
+    }
+
     HMENU language_menu() const {
         HMENU menu = CreatePopupMenu();
         AppendMenuW(menu, MF_STRING, ID_LANGUAGE_SYSTEM, i18n::text(L"Follow system", L"跟随系统"));
@@ -691,21 +715,21 @@ private:
 
     void refresh_language() {
         caption_.refresh_language();
-        SetWindowTextW(subtitle_, i18n::text(L"Find your open tabs", L"标签页，随手找到"));
+        SetWindowTextW(subtitle_, i18n::text(L"Find open tabs and windows", L"查找打开的标签页和窗口"));
         SetWindowTextW(settings_button_, i18n::text(L"Shortcut", L"快捷键设置"));
         SetWindowTextW(keyboard_hint_, i18n::text(L"↑ ↓ Select     Enter Switch     Esc Hide", L"↑ ↓ 选择     Enter 切换     Esc 收起"));
         SetWindowTextW(setup_button_, i18n::text(L"Connect browser", L"连接新的浏览器"));
         SetWindowTextW(connection_list_, i18n::text(L"Browser connections", L"浏览器连接状态"));
         SetWindowTextW(connection_hint_, i18n::text(L"Click “Connect browser” to add Chrome or Edge.", L"点击“连接新的浏览器”，按引导添加 Chrome 或 Edge。"));
-        SendMessageW(edit_, EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(i18n::text(L"Search tab titles or URLs", L"搜索标签页标题或网址")));
-        const wchar_t* headers[] = {i18n::text(L"Title", L"标题"), i18n::text(L"URL", L"网址"), i18n::text(L"Browser / Profile", L"浏览器 / 配置")};
-        const wchar_t* connections[] = {headers[2], i18n::text(L"Status", L"连接状态"), i18n::text(L"Tabs", L"标签页")};
+        SendMessageW(edit_, EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(i18n::text(L"Search titles, URLs, or windows", L"搜索标题、网址或窗口")));
+        const wchar_t* headers[] = {i18n::text(L"Title", L"标题"), i18n::text(L"URL / window", L"网址 / 窗口"), i18n::text(L"Source", L"来源")};
+        const wchar_t* connections[] = {i18n::text(L"Browser / Profile", L"浏览器 / 配置"), i18n::text(L"Status", L"连接状态"), i18n::text(L"Tabs", L"标签页")};
         for (int i = 0; i < 3; ++i) {
             LVCOLUMNW column{LVCF_TEXT};
             column.pszText = const_cast<LPWSTR>(headers[i]); ListView_SetColumn(list_, i, &column);
             column.pszText = const_cast<LPWSTR>(connections[i]); ListView_SetColumn(connection_list_, i, &column);
         }
-        wcscpy_s(tray_.szTip, (std::wstring(L"Glint " GLINT_VERSION_WSTRING) + i18n::text(L" · Tab search", L" · 标签页搜索")).c_str());
+        wcscpy_s(tray_.szTip, (std::wstring(L"Glint " GLINT_VERSION_WSTRING) + i18n::text(L" · Tab and window search", L" · 标签页与窗口搜索")).c_str());
         if (tray_added_) Shell_NotifyIconW(NIM_MODIFY, &tray_);
         if (setup_) {
             setup_->refresh_language();
@@ -716,8 +740,13 @@ private:
         // Translation does not change the query or connection data. Updating
         // cells in place preserves selection, keyboard focus and scroll.
         for (std::size_t i = 0; i < rows_.size(); ++i) {
-            auto name = connection_overview_.name_for(rows_[i].key.connection_id);
-            if (name.empty()) name = rows_[i].browser;
+            std::wstring name;
+            if (rows_[i].key.source == TabSource::Browser) {
+                name = connection_overview_.name_for(rows_[i].key.connection_id);
+                if (name.empty()) name = rows_[i].browser;
+            } else {
+                name = rows_[i].application;
+            }
             ListView_SetItemText(list_, static_cast<int>(i), 2, name.data());
         }
         const auto& profiles = connection_overview_.profiles();
@@ -754,14 +783,22 @@ private:
         query_empty_ = query.empty();
         result_selection_.prepare(list_, query, rows_, reset_selection);
         rows_ = index_.search(query);
+        auto native = desktop_targets_.search(query);
+        rows_.insert(rows_.end(), std::make_move_iterator(native.begin()),
+            std::make_move_iterator(native.end()));
         SendMessageW(list_, WM_SETREDRAW, FALSE, 0); ListView_DeleteAllItems(list_);
         for (std::size_t i = 0; i < rows_.size(); ++i) {
             const auto& row = rows_[i];
             LVITEMW item{LVIF_TEXT, static_cast<int>(i), 0, 0, 0, const_cast<LPWSTR>(row.title.c_str()), 0, 0, 0};
             ListView_InsertItem(list_, &item);
             ListView_SetItemText(list_, static_cast<int>(i), 1, const_cast<LPWSTR>(row.url.c_str()));
-            std::wstring source = connection_overview_.name_for(row.key.connection_id);
-            if (source.empty()) source = row.browser;
+            std::wstring source;
+            if (row.key.source == TabSource::Browser) {
+                source = connection_overview_.name_for(row.key.connection_id);
+                if (source.empty()) source = row.browser;
+            } else {
+                source = row.application;
+            }
             ListView_SetItemText(list_, static_cast<int>(i), 2, const_cast<LPWSTR>(source.c_str()));
         }
         result_selection_.restore(edit_, list_, rows_);
@@ -771,8 +808,8 @@ private:
 
     void update_result_status() {
         std::wstring text;
-        if (rows_.empty() && !query_empty_) text = i18n::text(L"No matching tabs", L"没有匹配结果");
-        else text = std::to_wstring(rows_.size()) + i18n::text(L" tabs", L" 个标签页");
+        if (rows_.empty() && !query_empty_) text = i18n::text(L"No matching results", L"没有匹配结果");
+        else text = std::to_wstring(rows_.size()) + i18n::text(L" results", L" 个结果");
         SetWindowTextW(status_, text.c_str());
     }
 
@@ -816,6 +853,20 @@ private:
         const int selected = ListView_GetNextItem(list_, -1, LVNI_SELECTED);
         if (selected < 0 || static_cast<std::size_t>(selected) >= rows_.size()) return;
         const auto& tab = rows_[static_cast<std::size_t>(selected)];
+        if (tab.key.source != TabSource::Browser) {
+            // Permission must be granted while Glint still owns the foreground.
+            // The desktop worker then selects a UIA tab, if applicable, and
+            // raises the already-validated window after Glint is hidden.
+            AllowSetForegroundWindow(GetCurrentProcessId());
+            hide_search();
+            if (!desktop_targets_.request_activation(tab)) {
+                show_search();
+                MessageBoxW(window_, i18n::text(
+                    L"Could not queue the window switch. Please try again.",
+                    L"暂时无法切换窗口，请稍后重试。"), L"Glint", MB_OK | MB_ICONWARNING);
+            }
+            return;
+        }
         const std::string request = std::to_string(request_counter_++);
         const Json message = Json::Object{{"type", "activate"}, {"version", static_cast<int>(kProtocolVersion)},
             {"requestId", request}, {"tabId", tab.key.tab_id}, {"windowId", tab.window_id}};
@@ -912,7 +963,7 @@ private:
         if (updater_) { updater_->stop(); updater_.reset(); }
         hotkey_window_.reset();
         setup_.reset();
-        hotkey_.stop(); remove_tray(); pipe_.stop(); window_ = nullptr;
+        hotkey_.stop(); remove_tray(); pipe_.stop(); desktop_targets_.stop(); window_ = nullptr;
         if (font_) { DeleteObject(font_); font_ = nullptr; }
         if (heading_font_) { DeleteObject(heading_font_); heading_font_ = nullptr; }
         if (small_font_) { DeleteObject(small_font_); small_font_ = nullptr; }

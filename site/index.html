@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f5f8fd">
-  <meta name="description" content="Glint 是 Windows 上的 Chrome 与 Edge 标签页搜索工具。在一个搜索窗口中查找不同浏览器、窗口和配置文件中已打开的标签页，并直接切换过去。">
+  <meta name="description" content="Glint 是 Windows 上的标签页与窗口搜索工具。在一个搜索窗口中查找 Chrome 与 Edge 标签页、其他应用窗口，以及受支持的记事本标签页，并直接切换过去。">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="zh_CN">
-  <meta property="og:title" content="Glint · 跨浏览器查找已打开的标签页">
-  <meta property="og:description" content="面向 Windows 的轻量标签页搜索工具。连接 Chrome 和 Edge，按下快捷键，搜索并切换到目标标签页。">
+  <meta property="og:title" content="Glint · 标签页与窗口统一搜索">
+  <meta property="og:description" content="面向 Windows 的轻量搜索工具。连接 Chrome 和 Edge，也可查找普通桌面窗口，按下快捷键即可搜索并切换。">
   <meta property="og:url" content="https://new-sailfish.github.io/glint/">
   <meta property="og:image" content="https://new-sailfish.github.io/glint/assets/search.png">
   <meta property="og:image:alt" content="Glint 的 Windows 搜索窗口，使用示例标签页展示搜索结果">
@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="styles.css">
   <script src="i18n.js" defer></script>
   <script src="app.js" defer></script>
-  <title>Glint · 跨浏览器查找已打开的标签页</title>
+  <title>Glint · 标签页与桌面窗口统一搜索</title>
 </head>
 <body>
   <a class="skip-link" href="#main">跳至主要内容</a>
@@ -34,9 +34,9 @@
   <main id="main">
     <section class="hero wrap" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span> WINDOWS 标签页搜索工具</p>
-        <h1 id="hero-title">跨浏览器查找<br>已打开的标签页</h1>
-        <p class="hero-intro">在一个窗口中搜索已连接的 Chrome 和 Edge 标签页。输入标题或网址关键词，直接切换到目标页面。</p>
+        <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span> WINDOWS 标签页与窗口搜索工具</p>
+        <h1 id="hero-title">标签页、窗口<br>一处查找</h1>
+        <p class="hero-intro">在一个窗口中搜索已连接的 Chrome 和 Edge 标签页、其他应用窗口，以及受支持的 Windows 11 记事本标签页。输入标题、网址或应用名，直接切换过去。</p>
         <div class="hero-actions">
           <a class="button primary" href="https://github.com/new-sailfish/glint/releases/latest/download/Glint.exe">下载 Glint.exe <span aria-hidden="true">↓</span></a>
           <a class="text-link" href="#demo">体验搜索演示 <span aria-hidden="true">↗</span></a>
@@ -54,9 +54,9 @@
     <section class="problem" aria-labelledby="problem-title">
       <div class="problem-inner wrap">
         <div class="problem-copy">
-          <h2 id="problem-title">标签页分散在<br>不同窗口与配置文件中</h2>
-          <p>工作文档、参考资料和日常页面往往同时打开在多个位置。标签数量增加后，仅靠标签栏和窗口预览，很难迅速定位需要的页面。</p>
-          <p class="problem-point">Glint 按标题或网址查找已连接的标签页，让你从搜索结果直接回到页面。</p>
+          <h2 id="problem-title">页面、文档与任务<br>分散在不同位置</h2>
+          <p>网页、文档和日常工具往往同时打开在多个浏览器与桌面窗口中。窗口和标签数量增加后，仅靠任务栏与窗口预览，很难迅速定位需要的内容。</p>
+          <p class="problem-point">Glint 按标题、网址或应用名查找浏览器标签页与桌面窗口，让你从搜索结果直接回到目标位置。</p>
         </div>
         <figure class="overload-visual reveal">
           <img src="assets/tab-overload.svg" width="1000" height="660" loading="lazy" alt="示意图：Chrome 和 Edge 的多个窗口、工作与个人配置文件中分散着许多标签页。">
@@ -74,8 +74,8 @@
         <div class="demo-explainer">
           <ol class="use-steps">
             <li><span class="step-index">01</span><div><h3>随时唤起</h3><p>默认使用 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd>，也可从托盘菜单配置自己的全局热键。</p></div></li>
-            <li><span class="step-index">02</span><div><h3>输入标题或网址</h3><p>搜索已连接的 Chrome 和 Edge 配置文件，无需先找到浏览器窗口。</p></div></li>
-            <li><span class="step-index">03</span><div><h3>选择后直接切换</h3><p>用方向键选择结果，按 Enter 回到标签页。实际应用中，Esc 隐藏搜索窗口。</p></div></li>
+            <li><span class="step-index">02</span><div><h3>输入标题、网址或应用名</h3><p>搜索已连接的 Chrome 和 Edge 配置文件，也可查找其他应用窗口和受支持的记事本标签。</p></div></li>
+            <li><span class="step-index">03</span><div><h3>选择后直接切换</h3><p>用方向键选择结果，按 Enter 回到标签页、记事本标签或应用窗口。实际应用中，Esc 隐藏搜索窗口。</p></div></li>
           </ol>
           <a class="text-link" href="https://github.com/new-sailfish/glint/blob/master/docs/user-guide.md">查看使用说明 <span aria-hidden="true">↗</span></a>
         </div>
@@ -150,7 +150,8 @@
       <div class="download-layout">
         <div class="download-copy"><h2 id="download-title">下载 Glint</h2><p>下载后运行 Glint.exe，<br>按连接向导接入你的浏览器。</p><a class="button primary" href="https://github.com/new-sailfish/glint/releases/latest/download/Glint.exe">下载 Glint.exe <span aria-hidden="true">↓</span></a><p class="download-requirements">Windows 10 / 11 x64<br>Chrome / Edge 105 或更新版本</p><div class="download-links"><a href="https://github.com/new-sailfish/glint/releases/latest/download/Glint-win-x64.zip">完整 ZIP 包</a><a href="https://github.com/new-sailfish/glint/releases">版本记录 <span aria-hidden="true">↗</span></a></div></div>
         <div class="faq"><h3>常见问题</h3>
-          <details><summary>标签页数据会上传吗？<span aria-hidden="true">+</span></summary><div><p>Glint 在本机接收已连接配置文件的标签页标题、网址等信息，并在内存中建立搜索索引，不将这些数据上传到云端。本网页的搜索演示仅使用固定示例数据。</p><a href="https://github.com/new-sailfish/glint/blob/master/docs/design.md">查看架构说明 ↗</a></div></details>
+          <details><summary>搜索数据会上传吗？<span aria-hidden="true">+</span></summary><div><p>Glint 在本机接收已连接配置文件的标签页标题、网址等信息，并读取桌面窗口标题和受支持的记事本标签，在内存中建立搜索索引，不将这些数据上传到云端。本网页的搜索演示仅使用固定示例数据。</p><a href="https://github.com/new-sailfish/glint/blob/master/docs/design.md">查看架构说明 ↗</a></div></details>
+          <details><summary>桌面窗口和 Sublime 标签页能单独搜索吗？<span aria-hidden="true">+</span></summary><div><p>符合条件且可见的普通顶层窗口都能按窗口标题搜索。Windows 11 记事本通过 UI Automation 提供可选择的标签时，会显示为独立结果；Sublime Text 的自绘标签没有通过 UI Automation 暴露，因此当前只搜索它的窗口，不提供 Sublime 插件。</p></div></details>
           <details><summary>为什么每个配置文件都要加载扩展？<span aria-hidden="true">+</span></summary><div><p>Chrome 和 Edge 的扩展按配置文件独立安装。只有加载并连接 Glint 扩展的配置文件，其标签页才会出现在搜索中。你可以在扩展面板中给配置文件设置“工作”或“个人”等本地名称。</p></div></details>
           <details><summary>重启浏览器或 Glint 后需要重新连接吗？<span aria-hidden="true">+</span></summary><div><p>正常重启后会自动重新连接并同步标签页，无需再次加载扩展。更新 Glint 时，可能需要在浏览器扩展页面重新加载已有的扩展，具体以版本说明为准。</p></div></details>
           <details><summary>需要哪些权限？<span aria-hidden="true">+</span></summary><div><p>扩展请求 tabs、nativeMessaging 和 storage 权限，分别用于读取标签页信息、连接本机 Glint 和保存扩展设置。首次配置需要手动开启开发者模式并加载扩展；本机注册不需要管理员权限。</p></div></details>
@@ -161,6 +162,6 @@
     </section>
   </main>
 
-  <footer class="site-footer wrap"><a class="footer-brand" href="#">Glint<span>Windows 标签页搜索</span></a><div><a href="https://github.com/new-sailfish/glint/blob/master/docs/user-guide.md">使用说明</a><a href="https://github.com/new-sailfish/glint">GitHub <span aria-hidden="true">↗</span></a><a href="https://github.com/new-sailfish/glint/issues">反馈问题 <span aria-hidden="true">↗</span></a></div></footer>
+  <footer class="site-footer wrap"><a class="footer-brand" href="#">Glint<span>Windows 标签页与窗口搜索</span></a><div><a href="https://github.com/new-sailfish/glint/blob/master/docs/user-guide.md">使用说明</a><a href="https://github.com/new-sailfish/glint">GitHub <span aria-hidden="true">↗</span></a><a href="https://github.com/new-sailfish/glint/issues">反馈问题 <span aria-hidden="true">↗</span></a></div></footer>
 </body>
 </html>

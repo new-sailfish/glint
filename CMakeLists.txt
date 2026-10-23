@@ -32,6 +32,7 @@ if(WIN32)
   add_executable(glint WIN32
     src/main.cpp
     src/win_app.cpp
+    src/desktop_targets.cpp
     src/hotkey.cpp
     src/hotkey_window.cpp
     src/update_window.cpp
@@ -48,7 +49,7 @@ if(WIN32)
     src/win_resources.rc
   )
   glint_add_build_version(glint)
-  target_link_libraries(glint PRIVATE glint_core glint_update user32 shell32 comctl32 advapi32 ole32 bcrypt)
+  target_link_libraries(glint PRIVATE glint_core glint_update user32 shell32 comctl32 advapi32 ole32 oleaut32 uiautomationcore dwmapi version bcrypt)
   target_include_directories(glint PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
   target_compile_features(glint PRIVATE cxx_std_20)
   if(MSVC)
@@ -78,6 +79,24 @@ if(GLINT_BUILD_TESTS)
     set_property(TARGET glint_setup_progress_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
   endif()
   add_test(NAME glint_setup_progress COMMAND glint_setup_progress_tests)
+
+  if(WIN32)
+    add_executable(glint_desktop_targets_tests
+      tests/test_desktop_targets.cpp
+      src/desktop_targets.cpp
+    )
+    target_include_directories(glint_desktop_targets_tests PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_link_libraries(glint_desktop_targets_tests PRIVATE
+      glint_core user32 ole32 oleaut32 uiautomationcore dwmapi version)
+    target_compile_features(glint_desktop_targets_tests PRIVATE cxx_std_20)
+    target_compile_definitions(glint_desktop_targets_tests PRIVATE UNICODE _UNICODE NOMINMAX)
+    if(MSVC)
+      target_compile_options(glint_desktop_targets_tests PRIVATE /W4 /permissive- /EHsc /utf-8 /UNDEBUG)
+      set_property(TARGET glint_desktop_targets_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_desktop_targets COMMAND glint_desktop_targets_tests)
+  endif()
 
   add_executable(glint_connection_overview_tests tests/test_connection_overview.cpp)
   target_include_directories(glint_connection_overview_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
