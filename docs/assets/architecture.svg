@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="620" viewBox="0 0 1280 620" role="img" aria-labelledby="title desc">
+  <title id="title">Glint 本机架构</title>
+  <desc id="desc">每个 Chrome 或 Edge 配置文件中安装一个 Glint 扩展，浏览器为它启动一个独立的 GlintBridge.exe 进程。扩展与桥接进程通过 Native Messaging 双向通信，桥接进程再通过当前 Windows 用户的命名管道连接 Glint.exe。标签页快照和增量更新流向桌面内存索引，激活请求返回浏览器。所有组件位于本机。</desc>
+  <defs>
+    <g id="glint-mark"><rect width="100" height="100" rx="24" fill="#2c61bd"/><path d="M50 8 60.8 39.2 92 50 60.8 60.8 50 92 39.2 60.8 8 50 39.2 39.2Z" fill="#fff"/><path d="m50 27.5 6.2 16.3 16.3 6.2-16.3 6.2-6.2 16.3-6.2-16.3-16.3-6.2 16.3-6.2Z" fill="#dce8ff"/><circle cx="75" cy="25" r="7" fill="#a9c6ff"/></g>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="m1 1 7 4-7 4" fill="none" stroke="#2c61bd" stroke-width="1.8" stroke-linejoin="round"/></marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="m1 1 7 4-7 4" fill="none" stroke="#7b91b1" stroke-width="1.8" stroke-linejoin="round"/></marker>
+  </defs>
+  <g font-family="Segoe UI, Microsoft YaHei, sans-serif">
+    <rect width="1280" height="620" rx="12" fill="#f5f8fd"/>
+    <text x="40" y="49" font-size="24" font-weight="600" fill="#223043">Glint 本机架构</text>
+    <text x="40" y="79" font-size="14" fill="#53657b">按配置文件连接，在同一个桌面窗口中搜索</text>
+    <rect x="1070" y="31" width="170" height="32" rx="16" fill="#e4ecfa"/><circle cx="1088" cy="47" r="4" fill="#2c61bd"/><text x="1101" y="52" font-size="12" fill="#2c61bd">当前 Windows 用户</text>
+    <path d="M40 103h1200" stroke="#d7e1ec"/>
+
+    <text x="40" y="139" font-size="12" font-weight="600" letter-spacing="1.5" fill="#53657b">浏览器配置文件</text>
+    <text x="472" y="139" font-size="12" font-weight="600" letter-spacing="1.5" fill="#53657b">浏览器启动的桥接进程</text>
+    <text x="931" y="139" font-size="12" font-weight="600" letter-spacing="1.5" fill="#53657b">桌面搜索程序</text>
+
+    <g transform="translate(40 163)">
+      <rect width="278" height="97" rx="6" fill="#fff" stroke="#cbd8e9"/>
+      <path d="M0 37h278" stroke="#e0e7f1"/>
+      <text x="18" y="24" font-size="13" font-weight="600" fill="#223043">Chrome · 工作</text>
+      <use href="#glint-mark" transform="translate(18 52) scale(.28)"/>
+      <text x="57" y="71" font-size="14" fill="#223043">Glint 扩展</text>
+      <text x="198" y="71" font-size="11" fill="#69809f">标签页</text>
+    </g>
+    <g transform="translate(40 286)">
+      <rect width="278" height="97" rx="6" fill="#fff" stroke="#cbd8e9"/>
+      <path d="M0 37h278" stroke="#e0e7f1"/>
+      <text x="18" y="24" font-size="13" font-weight="600" fill="#223043">Chrome · 个人</text>
+      <use href="#glint-mark" transform="translate(18 52) scale(.28)"/>
+      <text x="57" y="71" font-size="14" fill="#223043">Glint 扩展</text>
+      <text x="198" y="71" font-size="11" fill="#69809f">标签页</text>
+    </g>
+    <g transform="translate(40 409)">
+      <rect width="278" height="97" rx="6" fill="#fff" stroke="#cbd8e9"/>
+      <path d="M0 37h278" stroke="#e0e7f1"/>
+      <text x="18" y="24" font-size="13" font-weight="600" fill="#223043">Edge · 工作</text>
+      <use href="#glint-mark" transform="translate(18 52) scale(.28)"/>
+      <text x="57" y="71" font-size="14" fill="#223043">Glint 扩展</text>
+      <text x="198" y="71" font-size="11" fill="#69809f">标签页</text>
+    </g>
+
+    <g fill="none" stroke="#2c61bd" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)"><path d="M332 228H458"/><path d="M332 351H458"/><path d="M332 474H458"/></g>
+    <g font-size="11" text-anchor="middle" fill="#53657b"><text x="395" y="206">Native Messaging</text><text x="395" y="329">Native Messaging</text><text x="395" y="452">Native Messaging</text></g>
+
+    <g transform="translate(472 163)">
+      <rect width="258" height="97" rx="6" fill="#eaf1ff" stroke="#bdd0ef"/>
+      <text x="20" y="33" font-size="17" font-weight="600" fill="#254a85">GlintBridge.exe</text>
+      <text x="20" y="61" font-size="12" fill="#536b8e">转发消息 · 独立进程</text>
+      <text x="20" y="81" font-size="11" fill="#69809f">对应 Chrome · 工作</text>
+    </g>
+    <g transform="translate(472 286)">
+      <rect width="258" height="97" rx="6" fill="#eaf1ff" stroke="#bdd0ef"/>
+      <text x="20" y="33" font-size="17" font-weight="600" fill="#254a85">GlintBridge.exe</text>
+      <text x="20" y="61" font-size="12" fill="#536b8e">转发消息 · 独立进程</text>
+      <text x="20" y="81" font-size="11" fill="#69809f">对应 Chrome · 个人</text>
+    </g>
+    <g transform="translate(472 409)">
+      <rect width="258" height="97" rx="6" fill="#eaf1ff" stroke="#bdd0ef"/>
+      <text x="20" y="33" font-size="17" font-weight="600" fill="#254a85">GlintBridge.exe</text>
+      <text x="20" y="61" font-size="12" fill="#536b8e">转发消息 · 独立进程</text>
+      <text x="20" y="81" font-size="11" fill="#69809f">对应 Edge · 工作</text>
+    </g>
+
+    <g fill="none" stroke="#2c61bd" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)"><path d="M744 228H916"/><path d="M744 351H916"/><path d="M744 474H916"/></g>
+    <g font-size="11" text-anchor="middle" fill="#53657b"><text x="831" y="206">当前用户命名管道</text><text x="831" y="329">当前用户命名管道</text><text x="831" y="452">当前用户命名管道</text></g>
+
+    <g transform="translate(931 163)">
+      <rect width="309" height="343" rx="7" fill="#fff" stroke="#2c61bd" stroke-width="1.5"/>
+      <path d="M7 0h295a7 7 0 0 1 7 7v63H0V7a7 7 0 0 1 7-7Z" fill="#2c61bd"/>
+      <text x="24" y="31" font-size="22" font-weight="600" fill="#fff">Glint.exe</text>
+      <text x="24" y="53" font-size="12" fill="#dce8ff">一个桌面搜索入口</text>
+      <text x="24" y="108" font-size="15" font-weight="600" fill="#223043">内存标签页索引</text>
+      <text x="24" y="134" font-size="12" fill="#53657b">接收完整快照与增量更新</text>
+      <path d="M24 157h261" stroke="#d7e1ec"/>
+      <text x="24" y="191" font-size="15" font-weight="600" fill="#223043">原生搜索窗口</text>
+      <text x="24" y="217" font-size="12" fill="#53657b">按标题或网址搜索，选择后激活</text>
+      <path d="M24 241h261" stroke="#d7e1ec"/>
+      <text x="24" y="276" font-size="15" font-weight="600" fill="#223043">全局热键与托盘</text>
+      <text x="24" y="302" font-size="12" fill="#53657b">随时唤起，可配置快捷键</text>
+    </g>
+
+    <path d="M40 537h1200" stroke="#d7e1ec"/>
+    <path d="M40 571h54" stroke="#2c61bd" stroke-width="2" marker-end="url(#arrow)"/><text x="109" y="576" font-size="12" fill="#53657b">标签页快照与更新 → 桌面</text>
+    <path d="M447 571h-54" stroke="#7b91b1" stroke-width="2" marker-end="url(#arrow-muted)"/><text x="462" y="576" font-size="12" fill="#53657b">激活请求 → 浏览器</text>
+    <text x="1240" y="576" font-size="12" fill="#53657b" text-anchor="end">本机通信 · 不依赖云端服务</text>
+  </g>
+</svg>

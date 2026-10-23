@@ -142,7 +142,12 @@ foreach ($name in @('extension', 'assets')) {
 # documents. Local plans, validation notes, and new drafts must not ship by default.
 Get-SafeTree (Join-Path $repositoryDirectory 'docs') | Out-Null
 foreach ($name in @('docs/design.md', 'docs/protocol.md', 'docs/branding.md',
-    'docs/assets/glint-banner.svg', 'docs/assets/glint-logo.svg')) {
+    'docs/user-guide.md', 'docs/development.md', 'docs/assets/README.md',
+    'docs/assets/glint-banner.svg', 'docs/assets/glint-logo.svg',
+    'docs/assets/tab-overload.svg', 'docs/assets/search.png',
+    'docs/assets/setup-browser.png', 'docs/assets/setup-load.png',
+    'docs/assets/setup-connected.png', 'docs/assets/hotkey.png',
+    'docs/assets/architecture.svg')) {
   $releaseFiles[$name] = Join-Path $repositoryDirectory $name
 }
 # Browser profiles may already load this stable unpacked-extension path.

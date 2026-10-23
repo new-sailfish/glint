@@ -226,6 +226,74 @@ private:
     }
 };
 
+class ProvisionalSetupFrame {
+public:
+    ProvisionalSetupFrame() {
+        require(active_ == nullptr, "only one provisional setup frame fixture may be active");
+        hook_ = SetWindowsHookExW(WH_CBT, hook_proc, nullptr, GetCurrentThreadId());
+        require(hook_ != nullptr, "install the thread-local setup creation fixture");
+        active_ = this;
+    }
+    ~ProvisionalSetupFrame() { UnhookWindowsHookEx(hook_); active_ = nullptr; }
+    ProvisionalSetupFrame(const ProvisionalSetupFrame&) = delete;
+    ProvisionalSetupFrame& operator=(const ProvisionalSetupFrame&) = delete;
+    SIZE applied_size() const { return applied_size_; }
+private:
+    HHOOK hook_ = nullptr;
+    SIZE applied_size_{};
+    inline static thread_local ProvisionalSetupFrame* active_ = nullptr;
+    static LRESULT CALLBACK hook_proc(int code, WPARAM wparam, LPARAM lparam) {
+        if (code == HCBT_CREATEWND && active_) {
+            wchar_t klass[64]{};
+            GetClassNameW(reinterpret_cast<HWND>(wparam), klass, 64);
+            if (wcscmp(klass, L"Glint.SetupWindow") == 0) {
+                auto* creation = reinterpret_cast<CBT_CREATEWNDW*>(lparam)->lpcs;
+                // Simulate a provisional frame calculated at another scale.
+                // Only this thread's setup window is affected; monitor/DPI
+                // settings and the user's cursor remain untouched.
+                creation->cx = (std::max)(1, creation->cx / 2);
+                creation->cy = (std::max)(1, creation->cy / 2);
+                active_->applied_size_ = {creation->cx, creation->cy};
+            }
+        }
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+    }
+};
+
+void initial_frame_uses_window_dpi() {
+    Sandbox sandbox;
+    glint::SetupWindow setup(nullptr, [] {});
+    SIZE provisional{};
+    {
+        ProvisionalSetupFrame initial_frame;
+        setup.show();
+        provisional = initial_frame.applied_size();
+    }
+    require(provisional.cx > 0 && provisional.cy > 0, "the fixture must alter the initial setup frame");
+    const auto window = test_window();
+    const auto dpi = GetDpiForWindow(window);
+    require(dpi != 0, "read the initial setup window DPI");
+    RECT frame{}, client{};
+    require(GetWindowRect(window, &frame) && GetClientRect(window, &client), "read the initial setup dimensions");
+    MONITORINFO monitor{sizeof(monitor)};
+    require(GetMonitorInfoW(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &monitor), "read the initial setup monitor");
+    RECT expected{0, 0, MulDiv(680, dpi, 96), MulDiv(586, dpi, 96)};
+    require(AdjustWindowRectExForDpi(&expected, static_cast<DWORD>(GetWindowLongPtrW(window, GWL_STYLE)),
+        FALSE, static_cast<DWORD>(GetWindowLongPtrW(window, GWL_EXSTYLE)), dpi), "calculate the initial frame at its actual DPI");
+    const auto& work = monitor.rcWork;
+    const LONG width = (std::min)(expected.right - expected.left, work.right - work.left);
+    const LONG height = (std::min)(expected.bottom - expected.top, work.bottom - work.top);
+    std::cout << "initial setup frame: provisional=" << provisional.cx << 'x' << provisional.cy
+        << " actual=" << frame.right - frame.left << 'x' << frame.bottom - frame.top
+        << " client=" << client.right << 'x' << client.bottom << " dpi=" << dpi
+        << " expected=" << width << 'x' << height << '\n';
+    require(frame.right - frame.left == width && frame.bottom - frame.top == height,
+        "initial setup frame must use its actual monitor DPI before any synthetic DPI change or test resize");
+    require(frame.left == work.left + (work.right - work.left - width) / 2 &&
+        frame.top == work.top + (work.bottom - work.top - height) / 2,
+        "the corrected initial setup frame must stay centered in its monitor work area");
+}
+
 void resize_client(HWND window, int width, int height) {
     // A native window can extend past the test monitor. Size its client canvas
     // explicitly rather than changing the user's monitor or DPI settings.
@@ -686,6 +754,7 @@ int main() {
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         INITCOMMONCONTROLSEX controls{sizeof(controls), ICC_LISTVIEW_CLASSES};
         require(InitCommonControlsEx(&controls) != FALSE, "initialize native setup controls");
+        initial_frame_uses_window_dpi();
         hosted_native_frame_limit_layout();
         automatic_edge_flow();
         manual_validation_and_completion();

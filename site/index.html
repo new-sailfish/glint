@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f8fd">
+  <meta name="description" content="Glint 是 Windows 上的 Chrome 与 Edge 标签页搜索工具。在一个搜索窗口中查找不同浏览器、窗口和配置文件中已打开的标签页，并直接切换过去。">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:title" content="Glint · 跨浏览器查找已打开的标签页">
+  <meta property="og:description" content="面向 Windows 的轻量标签页搜索工具。连接 Chrome 和 Edge，按下快捷键，搜索并切换到目标标签页。">
+  <meta property="og:url" content="https://new-sailfish.github.io/glint/">
+  <meta property="og:image" content="https://new-sailfish.github.io/glint/assets/search.png">
+  <meta property="og:image:alt" content="Glint 的 Windows 搜索窗口，使用示例标签页展示搜索结果">
+  <link rel="canonical" href="https://new-sailfish.github.io/glint/">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2724%27 fill=%27%232c61bd%27/%3E%3Cpath d=%27M50 8L60.8 39.2 92 50 60.8 60.8 50 92 39.2 60.8 8 50 39.2 39.2Z%27 fill=%27white%27/%3E%3Cpath d=%27M50 27.5L56.2 43.8 72.5 50 56.2 56.2 50 72.5 43.8 56.2 27.5 50 43.8 43.8Z%27 fill=%27%23dce8ff%27/%3E%3Ccircle cx=%2775%27 cy=%2725%27 r=%277%27 fill=%27%23a9c6ff%27/%3E%3C/svg%3E" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+  <title>Glint · 跨浏览器查找已打开的标签页</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳至主要内容</a>
+  <header class="site-header wrap">
+    <a class="wordmark" href="#" aria-label="Glint 首页"><img src="assets/glint-logo.svg" width="460" height="120" alt="Glint"></a>
+    <nav aria-label="主要导航">
+      <a href="#demo">搜索演示</a>
+      <a href="#setup">连接浏览器</a>
+      <a class="nav-download" href="#download">下载 <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span> WINDOWS 标签页搜索工具</p>
+        <h1 id="hero-title">跨浏览器查找<br>已打开的标签页</h1>
+        <p class="hero-intro">在一个窗口中搜索已连接的 Chrome 和 Edge 标签页。输入标题或网址关键词，直接切换到目标页面。</p>
+        <div class="hero-actions">
+          <a class="button primary" href="https://github.com/new-sailfish/glint/releases/latest/download/Glint.exe">下载 Glint.exe <span aria-hidden="true">↓</span></a>
+          <a class="text-link" href="#demo">体验搜索演示 <span aria-hidden="true">↗</span></a>
+        </div>
+        <p class="download-note">Windows 10 / 11 · x64 · 单个 EXE</p>
+        <div class="shortcut-line"><span>默认唤起快捷键</span><div class="keys" aria-label="Control 加 Shift 加空格"><kbd>Ctrl</kbd><span>+</span><kbd>Shift</kbd><span>+</span><kbd>Space</kbd></div></div>
+      </div>
+      <figure class="hero-visual">
+        <div class="hero-visual-label"><span>Glint 搜索窗口</span><span>Chrome + Edge</span></div>
+        <div class="screenshot-stage"><img class="product-screenshot" src="assets/search.png" width="700" height="520" fetchpriority="high" alt="Glint 实际搜索界面：搜索框下方统一列出 Chrome 和 Edge 的示例标签页，并显示所属浏览器与配置文件。"></div>
+        <figcaption><span class="caption-dot" aria-hidden="true"></span>原生界面渲染，示例数据</figcaption>
+      </figure>
+    </section>
+
+    <section class="problem" aria-labelledby="problem-title">
+      <div class="problem-inner wrap">
+        <div class="problem-copy">
+          <h2 id="problem-title">标签页分散在<br>不同窗口与配置文件中</h2>
+          <p>工作文档、参考资料和日常页面往往同时打开在多个位置。标签数量增加后，仅靠标签栏和窗口预览，很难迅速定位需要的页面。</p>
+          <p class="problem-point">Glint 按标题或网址查找已连接的标签页，让你从搜索结果直接回到页面。</p>
+        </div>
+        <figure class="overload-visual reveal">
+          <img src="assets/tab-overload.svg" width="1000" height="660" loading="lazy" alt="示意图：Chrome 和 Edge 的多个窗口、工作与个人配置文件中分散着许多标签页。">
+          <figcaption>多窗口、多配置文件场景示意</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="demo-section section-pad wrap" id="demo" aria-labelledby="demo-title">
+      <div class="section-heading">
+        <div><h2 id="demo-title">统一搜索，直接切换</h2></div>
+        <p>按下快捷键，输入关键词，再按 Enter。<br>目标窗口即使已最小化，也能被还原并切换到前台。</p>
+      </div>
+      <div class="demo-layout">
+        <div class="demo-explainer">
+          <ol class="use-steps">
+            <li><span class="step-index">01</span><div><h3>随时唤起</h3><p>默认使用 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd>，也可从托盘菜单配置自己的全局热键。</p></div></li>
+            <li><span class="step-index">02</span><div><h3>输入标题或网址</h3><p>搜索已连接的 Chrome 和 Edge 配置文件，无需先找到浏览器窗口。</p></div></li>
+            <li><span class="step-index">03</span><div><h3>选择后直接切换</h3><p>用方向键选择结果，按 Enter 回到标签页。实际应用中，Esc 隐藏搜索窗口。</p></div></li>
+          </ol>
+          <a class="text-link" href="https://github.com/new-sailfish/glint/blob/master/docs/user-guide.md">查看使用说明 <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="search-demo reveal" id="search-demo">
+          <div class="demo-toolbar"><span class="demo-name">Glint 搜索演示</span><span class="sample-badge">示例数据</span></div>
+          <div class="demo-input-wrap">
+            <label for="demo-query">搜索示例标签页</label>
+            <div class="demo-search-field"><span aria-hidden="true" class="search-symbol"></span><input id="demo-query" type="search" placeholder="试试“设计”或“github”" autocomplete="off" spellcheck="false" aria-describedby="demo-disclaimer demo-shortcuts" aria-controls="demo-results"><button id="demo-clear" type="button" aria-label="清空搜索" hidden>×</button></div>
+          </div>
+          <p class="demo-status" id="demo-status" role="status" aria-live="polite" aria-atomic="true">6 个示例标签页</p>
+          <ul class="demo-results" id="demo-results" aria-label="示例搜索结果">
+            <li data-title="产品设计评审 · 飞书文档" data-url="https://feishu.cn/docs/product-design"><button class="result" type="button"><span class="result-browser chrome" aria-label="Chrome">C</span><span class="result-content"><strong>产品设计评审 · 飞书文档</strong><span>feishu.cn/docs/product-design</span></span><span class="result-profile">Chrome · 工作</span><span class="result-enter" aria-hidden="true">↵</span></button></li>
+            <li data-title="设计规范 · Figma" data-url="https://figma.com/design/design-system"><button class="result" type="button"><span class="result-browser edge" aria-label="Edge">E</span><span class="result-content"><strong>设计规范 · Figma</strong><span>figma.com/design/design-system</span></span><span class="result-profile">Edge · 工作</span><span class="result-enter" aria-hidden="true">↵</span></button></li>
+            <li data-title="CSS Grid · MDN Web Docs" data-url="https://developer.mozilla.org/en-US/docs/Web/CSS/grid"><button class="result" type="button"><span class="result-browser chrome" aria-label="Chrome">C</span><span class="result-content"><strong>CSS Grid · MDN Web Docs</strong><span>developer.mozilla.org/en-US/docs/Web/CSS/grid</span></span><span class="result-profile">Chrome · 个人</span><span class="result-enter" aria-hidden="true">↵</span></button></li>
+            <li data-title="项目周报 · Notion" data-url="https://notion.so/project-weekly"><button class="result" type="button"><span class="result-browser chrome" aria-label="Chrome">C</span><span class="result-content"><strong>项目周报 · Notion</strong><span>notion.so/project-weekly</span></span><span class="result-profile">Chrome · 工作</span><span class="result-enter" aria-hidden="true">↵</span></button></li>
+            <li data-title="产品设计需求 · GitHub" data-url="https://github.com/example/project/issues/42"><button class="result" type="button"><span class="result-browser edge" aria-label="Edge">E</span><span class="result-content"><strong>产品设计需求 · GitHub</strong><span>github.com/example/project/issues/42</span></span><span class="result-profile">Edge · 工作</span><span class="result-enter" aria-hidden="true">↵</span></button></li>
+            <li data-title="日历 · Outlook" data-url="https://outlook.live.com/calendar"><button class="result" type="button"><span class="result-browser edge" aria-label="Edge">E</span><span class="result-content"><strong>日历 · Outlook</strong><span>outlook.live.com/calendar</span></span><span class="result-profile">Edge · 个人</span><span class="result-enter" aria-hidden="true">↵</span></button></li>
+          </ul>
+          <div class="demo-empty" id="demo-empty" hidden><strong>没有匹配的示例标签页</strong><p>试试“设计”“github”或“日历”，也可以清空搜索查看全部示例。</p></div>
+          <div class="demo-footer" id="demo-shortcuts"><span><kbd>↑</kbd><kbd>↓</kbd> 选择</span><span><kbd>Enter</kbd> 模拟切换</span><span><kbd>Esc</kbd> 清空示例</span></div>
+          <p class="demo-disclaimer" id="demo-disclaimer">此演示仅使用页面内的示例数据，不读取或操作你的浏览器标签页。</p>
+          <noscript><p class="noscript-note">启用 JavaScript 后可筛选以上示例。Glint 应用的搜索不依赖本网页。</p></noscript>
+        </div>
+      </div>
+    </section>
+
+    <section class="setup-section section-pad" id="setup" aria-labelledby="setup-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <div><h2 id="setup-title">按向导完成浏览器连接</h2></div>
+          <p>Glint 已内置扩展文件。首次连接时，按向导在浏览器中加载扩展；每个需要搜索的配置文件都要设置一次。</p>
+        </div>
+        <div class="setup-options"><span>查看对应浏览器的步骤</span><div class="browser-switch" role="group" aria-label="设置教程的浏览器"><button type="button" data-browser="chrome" aria-pressed="true"><span class="browser-initial chrome" aria-hidden="true">C</span>Chrome</button><button type="button" data-browser="edge" aria-pressed="false"><span class="browser-initial edge" aria-hidden="true">E</span>Edge</button></div></div>
+        <noscript><p class="noscript-note">以下展示 Chrome 步骤。使用 Edge 时，在向导中选择 Edge，进入 edge://extensions/，开启左侧栏的“开发人员模式”，再点击“加载解压缩的扩展”。其他操作相同。</p></noscript>
+        <div class="setup-layout" id="setup-guide">
+          <nav class="setup-step-nav" aria-label="连接步骤"><ol>
+            <li><a href="#setup-step-1" data-step="0" aria-current="step"><span>01</span>选择浏览器</a></li>
+            <li><a href="#setup-step-2" data-step="1"><span>02</span>打开扩展页面</a></li>
+            <li><a href="#setup-step-3" data-step="2"><span>03</span>开启开发者模式</a></li>
+            <li><a href="#setup-step-4" data-step="3"><span>04</span>加载扩展文件夹</a></li>
+            <li><a href="#setup-step-5" data-step="4"><span>05</span>确认连接</a></li>
+          </ol></nav>
+          <div class="setup-panels">
+            <article class="setup-panel" id="setup-step-1" aria-labelledby="setup-title-1">
+              <div class="setup-description"><p class="step-count">步骤 1 / 5</p><h3 id="setup-title-1">运行 Glint，选择浏览器</h3><p>打开下载的 Glint.exe，点击<strong>连接新的浏览器</strong>。在向导中选择 <strong data-browser-field="name">Chrome</strong>，再点击<strong>下一步：打开扩展页</strong>。</p><p class="setup-note">扩展文件会自动准备好，无需单独下载，也无需管理员权限。</p></div>
+              <figure class="setup-figure"><img src="assets/setup-browser.png" width="680" height="586" loading="lazy" alt="Glint 实际连接向导：选择 Chrome 或 Edge 浏览器。"><figcaption>原生界面渲染 · 选择浏览器，以 Chrome 为例</figcaption></figure>
+            </article>
+            <article class="setup-panel" id="setup-step-2" aria-labelledby="setup-title-2">
+              <div class="setup-description"><p class="step-count">步骤 2 / 5</p><h3 id="setup-title-2">进入目标配置文件的扩展页面</h3><p>点击<strong>打开浏览器并复制页面地址</strong>。通过浏览器头像切换到需要搜索的配置文件，在地址栏粘贴地址并按 Enter。</p><code class="browser-address" data-browser-field="address">chrome://extensions/</code><p class="setup-note">若浏览器未自动打开，可以手动打开，再输入上面的地址。</p></div>
+              <div class="address-illustration" role="img" aria-label="操作示意：在浏览器地址栏输入扩展管理页面地址"><span class="illustration-label">在浏览器地址栏中输入</span><div class="illustration-address"><span aria-hidden="true">↗</span><span data-browser-field="address">chrome://extensions/</span><kbd>Enter</kbd></div><p>请先确认右上角头像对应的配置文件</p><span class="illustration-caption">操作示意</span></div>
+            </article>
+            <article class="setup-panel" id="setup-step-3" aria-labelledby="setup-title-3">
+              <div class="setup-description"><p class="step-count">步骤 3 / 5</p><h3 id="setup-title-3">开启开发者模式</h3><p data-browser-field="developer">在 Chrome 扩展页面右上角，开启“开发者模式”（Developer mode）。</p><p>开启后，页面中会出现加载本地扩展的按钮。返回 Glint，继续下一步。</p><p class="setup-note">此版本通过本地文件夹加载扩展，需要你在浏览器中完成确认。</p></div>
+              <div class="developer-illustration" role="img" aria-label="操作示意：打开浏览器的开发者模式开关"><span class="illustration-label">扩展管理页面</span><div class="developer-switch-row"><div><strong data-browser-field="mode">开发者模式</strong><span>Developer mode</span></div><span class="illustrated-toggle" aria-hidden="true"></span></div><span class="illustration-load" data-browser-field="load">加载已解压的扩展程序</span><span class="illustration-caption">操作示意 · 浏览器界面可能因版本而异</span></div>
+            </article>
+            <article class="setup-panel" id="setup-step-4" aria-labelledby="setup-title-4">
+              <div class="setup-description"><p class="step-count">步骤 4 / 5</p><h3 id="setup-title-4">选择扩展文件夹</h3><p>在 Glint 中点击<strong>复制扩展文件夹路径</strong>，回到浏览器点击<strong data-browser-field="load">加载已解压的扩展程序</strong>（Load unpacked）。</p><p>在弹出的窗口底部，将路径粘贴到<strong>文件夹</strong>输入框，直接点击<strong>选择文件夹</strong>。</p><p class="setup-note">路径应以 <code>Glint\browser-extension</code> 结尾。请选择这个文件夹，而不是它的上一级。</p></div>
+              <figure class="setup-figure"><img src="assets/setup-load.png" width="680" height="586" loading="lazy" alt="Glint 实际连接向导：复制扩展文件夹路径，并在浏览器中加载已解压的扩展。"><figcaption>原生界面渲染 · 加载扩展，以 Chrome 为例</figcaption></figure>
+            </article>
+            <article class="setup-panel" id="setup-step-5" aria-labelledby="setup-title-5">
+              <div class="setup-description"><p class="step-count">步骤 5 / 5</p><h3 id="setup-title-5">确认连接，开始搜索</h3><p>回到 Glint，点击<strong>已加载，检查连接</strong>。收到浏览器的标签页后，向导会显示<strong>已连接</strong>和标签页数量，点击<strong>开始搜索</strong>即可使用。</p><p class="setup-note">需要添加其他浏览器或配置文件时，再次点击“连接新的浏览器”，在对应配置文件中重复以上步骤。</p></div>
+              <figure class="setup-figure"><img src="assets/setup-connected.png" width="680" height="586" loading="lazy" alt="Glint 实际连接成功界面：已接收浏览器标签页，显示连接状态与开始搜索按钮；使用示例标签页。"><figcaption>原生界面渲染 · Chrome 连接成功，示例数据</figcaption></figure>
+            </article>
+            <div class="setup-controls" hidden><button id="setup-back" class="button secondary" type="button" disabled><span aria-hidden="true">←</span>上一步</button><p id="setup-progress" aria-live="polite">步骤 1 / 5</p><button id="setup-next" class="button primary" type="button">下一步<span aria-hidden="true">→</span></button></div>
+          </div>
+        </div>
+        <p class="setup-full-guide">连接后请保留扩展文件夹，浏览器仍需从该位置加载扩展。<a href="https://github.com/new-sailfish/glint/blob/master/docs/user-guide.md">完整安装与故障排查说明 <span aria-hidden="true">↗</span></a></p>
+      </div>
+    </section>
+
+    <section class="download-section section-pad wrap" id="download" aria-labelledby="download-title">
+      <div class="download-layout">
+        <div class="download-copy"><h2 id="download-title">下载 Glint</h2><p>下载后运行 Glint.exe，<br>按连接向导接入你的浏览器。</p><a class="button primary" href="https://github.com/new-sailfish/glint/releases/latest/download/Glint.exe">下载 Glint.exe <span aria-hidden="true">↓</span></a><p class="download-requirements">Windows 10 / 11 x64<br>Chrome / Edge 105 或更新版本</p><div class="download-links"><a href="https://github.com/new-sailfish/glint/releases/latest/download/Glint-win-x64.zip">完整 ZIP 包</a><a href="https://github.com/new-sailfish/glint/releases">版本记录 <span aria-hidden="true">↗</span></a></div></div>
+        <div class="faq"><h3>常见问题</h3>
+          <details><summary>标签页数据会上传吗？<span aria-hidden="true">+</span></summary><div><p>Glint 在本机接收已连接配置文件的标签页标题、网址等信息，并在内存中建立搜索索引，不将这些数据上传到云端。本网页的搜索演示仅使用固定示例数据。</p><a href="https://github.com/new-sailfish/glint/blob/master/docs/design.md">查看架构说明 ↗</a></div></details>
+          <details><summary>为什么每个配置文件都要加载扩展？<span aria-hidden="true">+</span></summary><div><p>Chrome 和 Edge 的扩展按配置文件独立安装。只有加载并连接 Glint 扩展的配置文件，其标签页才会出现在搜索中。你可以在扩展面板中给配置文件设置“工作”或“个人”等本地名称。</p></div></details>
+          <details><summary>重启浏览器或 Glint 后需要重新连接吗？<span aria-hidden="true">+</span></summary><div><p>正常重启后会自动重新连接并同步标签页，无需再次加载扩展。更新 Glint 时，可能需要在浏览器扩展页面重新加载已有的扩展，具体以版本说明为准。</p></div></details>
+          <details><summary>需要哪些权限？<span aria-hidden="true">+</span></summary><div><p>扩展请求 tabs、nativeMessaging 和 storage 权限，分别用于读取标签页信息、连接本机 Glint 和保存扩展设置。首次配置需要手动开启开发者模式并加载扩展；本机注册不需要管理员权限。</p></div></details>
+          <details><summary>退出 Glint 后，后台进程会停止吗？<span aria-hidden="true">+</span></summary><div><p>从托盘菜单退出会停止桌面搜索程序。每个已连接配置文件的桥接进程会在后台等待 Glint 再次启动；关闭浏览器或停用扩展后，对应的桥接进程也会退出。</p></div></details>
+          <details><summary>可以修改唤起搜索的快捷键吗？<span aria-hidden="true">+</span></summary><div><p>可以。右键点击托盘图标，选择“配置全局热键”，录入组合键并保存。如果组合键已被占用，Glint 会提示冲突并保留原来的快捷键。</p><a href="assets/hotkey.png">查看热键设置实际界面 ↗</a></div></details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer wrap"><a class="footer-brand" href="#">Glint<span>Windows 标签页搜索</span></a><div><a href="https://github.com/new-sailfish/glint/blob/master/docs/user-guide.md">使用说明</a><a href="https://github.com/new-sailfish/glint">GitHub <span aria-hidden="true">↗</span></a><a href="https://github.com/new-sailfish/glint/issues">反馈问题 <span aria-hidden="true">↗</span></a></div></footer>
+</body>
+</html>

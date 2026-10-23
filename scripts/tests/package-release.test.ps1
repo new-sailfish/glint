@@ -91,8 +91,18 @@ function New-Fixture([switch]$NoGit) {
       'docs/design.md' = 'Public design'
       'docs/protocol.md' = 'Public protocol'
       'docs/branding.md' = 'Public branding'
+      'docs/user-guide.md' = 'Public user guide'
+      'docs/development.md' = 'Public developer guide'
+      'docs/assets/README.md' = 'Screenshot provenance'
       'docs/assets/glint-banner.svg' = '<svg>banner</svg>'
       'docs/assets/glint-logo.svg' = '<svg>logo</svg>'
+      'docs/assets/tab-overload.svg' = '<svg>browser illustration</svg>'
+      'docs/assets/search.png' = 'search screenshot'
+      'docs/assets/setup-browser.png' = 'browser selection screenshot'
+      'docs/assets/setup-load.png' = 'extension loading screenshot'
+      'docs/assets/setup-connected.png' = 'connected screenshot'
+      'docs/assets/hotkey.png' = 'hotkey screenshot'
+      'docs/assets/architecture.svg' = '<svg>architecture</svg>'
       'assets/logo.svg' = '<svg />'
       'extension/manifest.json' = '{"manifest_version":3}'
       'extension/background.js' = 'background'
@@ -186,7 +196,12 @@ try {
     $fixture = New-Fixture
     Invoke-Package $fixture
     $publicDocuments = @('docs/design.md', 'docs/protocol.md', 'docs/branding.md',
-      'docs/assets/glint-banner.svg', 'docs/assets/glint-logo.svg')
+      'docs/user-guide.md', 'docs/development.md', 'docs/assets/README.md',
+      'docs/assets/glint-banner.svg', 'docs/assets/glint-logo.svg',
+      'docs/assets/tab-overload.svg', 'docs/assets/search.png',
+      'docs/assets/setup-browser.png', 'docs/assets/setup-load.png',
+      'docs/assets/setup-connected.png', 'docs/assets/hotkey.png',
+      'docs/assets/architecture.svg')
     $internalDocuments = @('docs/unknown-draft.md', 'docs/superpowers/plans/private-plan.md',
       'docs/superpowers/specs/private-spec.md', 'docs/validation-2026-10-22.md', 'docs/assets/screenshot.png')
     $manifestPath = Join-Path $fixture 'dist/release-manifest.json'

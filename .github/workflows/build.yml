@@ -3,9 +3,9 @@ name: Build Glint
 on:
   push:
     branches: [master, main]
-    paths-ignore: ['**/*.md', 'docs/**', '.superpowers/**', '.playwright-mcp/**']
+    paths-ignore: ['**/*.md', 'docs/**', 'site/**', '.github/workflows/pages.yml', '.superpowers/**', '.playwright-mcp/**']
   pull_request:
-    paths-ignore: ['**/*.md', 'docs/**', '.superpowers/**', '.playwright-mcp/**']
+    paths-ignore: ['**/*.md', 'docs/**', 'site/**', '.github/workflows/pages.yml', '.superpowers/**', '.playwright-mcp/**']
   workflow_dispatch:
 
 concurrency:

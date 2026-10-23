@@ -1,0 +1,44 @@
+name: Publish product site
+
+on:
+  push:
+    branches: [master, main]
+    paths: ['site/**', 'docs/assets/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/configure-pages@v5
+      - name: Prepare static site
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path _site/assets -Force | Out-Null
+          Copy-Item site/index.html, site/styles.css, site/app.js -Destination _site
+          Copy-Item docs/assets/* -Destination _site/assets
+          New-Item -ItemType File -Path _site/.nojekyll -Force | Out-Null
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

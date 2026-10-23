@@ -128,7 +128,18 @@ bool SetupWindow::create() {
         work.left + (work.right - work.left - width) / 2, work.top + (work.bottom - work.top - height) / 2,
         width, height, nullptr, nullptr, klass.hInstance, this);
     if (!window_) return false;
+    // Initial placement can resolve to a monitor with a different scale from
+    // the system DPI. Size the hidden frame and controls at that same scale.
     dpi_ = GetDpiForWindow(window_);
+    if (!dpi_) dpi_ = 96;
+    frame = {0, 0, px(kContentWidth), px(kContentHeight)};
+    AdjustWindowRectExForDpi(&frame, style, FALSE, WS_EX_CONTROLPARENT, dpi_);
+    const int actual_width = (std::min)(frame.right - frame.left, work.right - work.left);
+    const int actual_height = (std::min)(frame.bottom - frame.top, work.bottom - work.top);
+    SetWindowPos(window_, nullptr,
+        work.left + (work.right - work.left - actual_width) / 2,
+        work.top + (work.bottom - work.top - actual_height) / 2,
+        actual_width, actual_height, SWP_NOZORDER | SWP_NOACTIVATE);
     heading_ = add(L"STATIC", L"", 0, 0, 76, 22, 580, 36, -1, 2, true);
     add(L"STATIC", L"让打开的标签页出现在 Glint 搜索中。", 0, 0, 76, 66, 580, 24, -1, 0, true);
     progress_ = add(L"STATIC", L"", 0, StepProgress, 24, 102, 632, 24, -1, 1, true);

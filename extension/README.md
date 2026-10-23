@@ -40,7 +40,7 @@ Chrome 和 Edge 要求用户在每个需要搜索的配置文件中确认加载�
 
 Chrome 加载后正常、重启后消失的现象，强烈支持同一路径的旧路径 ID 记录与新公钥 ID 冲突这一解释；尚未读取浏览器配置文件记录确证。新目录使当前扩展使用独立加载路径。若无公钥的旧版扩展仍可见，可选择移除；移除可能清除已设的配置文件名称。若旧扩展来自其他目录，仍可在向导的修复页粘贴其实际扩展地址来注册。
 
-连接一直等待或使用其他 ID 的扩展时，可复制当前扩展选项页的完整地址（`chrome-extension://…/options.html`），或点击扩展页的**复制 ID**。直接粘贴到 Glint 第三步的修复输入框，点击**保存 ID 并重试**，再回扩展页点击**重试连接**。无需手动截取地址中的 ID。手动注册只允许所填写的单个 ID；收到真实标签页前仍会保持等待状态。
+连接一直等待或使用其他 ID 的扩展时，可复制当前扩展选项页的完整地址（`chrome-extension://…/options.html`），或点击扩展页的**复制 ID**。在 Glint 向导的确认连接页面点击**连接遇到问题**，将地址粘贴到修复输入框，点击**保存 ID 并重试**，再回扩展页点击**重试连接**。无需手动截取地址中的 ID。手动注册只允许所填写的单个 ID；收到真实标签页前仍会保持等待状态。
 
 ## 连接状态与排查
 
@@ -50,7 +50,7 @@ Chrome 加载后正常、重启后消失的现象，强烈支持同一路径的�
 - **尚未建立桥接通道**：在 Glint 向导中选择当前浏览器以完成注册。页面会显示浏览器提供的原始错误。修复后点击**重试连接**，也可以等待自动重连（最多间隔 30 秒）。旧版升级请先按上一节从新目录加载扩展。
 - 更换 `Glint.exe` 的位置后，重新运行连接向导以更新通信桥注册。注册指向当前用户应用目录中的 `GlintBridge.exe`，不直接指向桌面 EXE；内置扩展目录保持在 `%LOCALAPPDATA%\Glint\browser-extension`。
 - 只接入了一个配置文件时，Glint 无法看到其他尚未安装扩展的配置文件中的标签页。
-- 注册操作只写当前 Windows 用户的 HKCU 项，无需管理员权限。命令行注册和注销方式见项目根目录 README。
+- 注册操作只写当前 Windows 用户的 HKCU 项，无需管理员权限。命令行注册和注销方式见[使用指南](../docs/user-guide.md)。
 
 当前扩展申请 `tabs`、`nativeMessaging`、`storage` 权限；`storage` 只保存配置文件身份和可选标签。页面不加载外部脚本、字体或其他依赖。
 
@@ -78,7 +78,7 @@ Desktop → browser:
 
 Browser → desktop activation result:
 
-- `activate_result`: `{type, version, requestId, ok, error?}`. Success requires a focused browser window and an active tab in that window. Focus is checked at most eight times, with 50 ms between checks; a resolved API promise alone is insufficient. Closed tabs/windows and refused foreground focus are reported as failures.
+- `activate_result`: `{type, version, requestId, ok, error?}`. Success requires a focused browser window and an active tab in that window. Focus is checked at most 12 times, with 50 ms between checks, and must remain stable for four consecutive samples. Up to two focus retries are allowed; a resolved API promise alone is insufficient. Closed tabs/windows and refused foreground focus are reported as failures.
 
 During a snapshot, tab events are queued. Once the snapshot is sent, each queued event re-reads the current tab before replaying it. This prevents a stale `tabs.query` result from overwriting a title, URL, window move or active state that changed during synchronization.
 

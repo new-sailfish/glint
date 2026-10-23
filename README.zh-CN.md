@@ -1,214 +1,134 @@
 <p align="center">
-  <img src="docs/assets/glint-banner.svg" alt="Glint — 轻快地找到标签页，继续手头的事。" width="800">
+  <img src="docs/assets/glint-logo.svg" alt="Glint 图标" width="230" height="60">
 </p>
 
-# Glint 使用说明
+# Glint · 跨浏览器标签页搜索
 
-[下载 Glint.exe](https://github.com/new-sailfish/glint/releases/latest/download/Glint.exe) · [所有发布版本](https://github.com/new-sailfish/glint/releases)
+在 Windows 10/11 x64 上，按标题或网址搜索 Chrome、Edge 中已打开的标签页。
 
-Glint 在 Windows 10/11 上搜索已连接的 Chrome、Edge 标签页。运行
-`Glint.exe`，默认按 `Ctrl+Shift+Space` 搜索标题和网址；上下键选择，回车
-切换，Esc 隐藏。关闭窗口后程序仍在托盘运行。
+[![最新版本](https://img.shields.io/github/v/release/new-sailfish/glint?label=release&color=1677ff)](https://github.com/new-sailfish/glint/releases/latest)
+![Windows 10/11 x64](https://img.shields.io/badge/Windows-10%2F11_x64-1677ff)
+![Chrome 105+](https://img.shields.io/badge/Chrome-105%2B-4285F4?logo=googlechrome&logoColor=white)
+![Edge 105+](https://img.shields.io/badge/Edge-105%2B-0078D7)
+[![构建状态](https://github.com/new-sailfish/glint/actions/workflows/build.yml/badge.svg)](https://github.com/new-sailfish/glint/actions/workflows/build.yml)
 
-在搜索框按上箭头时，焦点仍留在搜索框；按下箭头进入列表第一项。在列表第一项
-按上箭头，焦点回到搜索框，保留原来的搜索文字和光标位置。
-Home、PageUp 在列表第一项也可返回搜索框；若键盘将 Fn+↑ 映射为这两个键之一，
-该组合也支持返回。Home、PageUp 在列表其他位置保留原有导航行为，在搜索框内
-保留原有编辑行为。
+[**下载 Glint.exe**](https://github.com/new-sailfish/glint/releases/latest/download/Glint.exe) · [项目网站](https://new-sailfish.github.io/glint/) · [English](README.md) · [详细使用指南（英文）](docs/user-guide.md)
 
-## 自定义快捷键
+## 项目背景
 
-右键托盘图标，选择 **配置全局热键**。点击快捷键输入框，直接按下想使用的
-组合（例如 `Ctrl+Alt+K`），再点击 **保存**。字母、数字等普通键须搭配
-Ctrl、Alt 或 Win，也可叠加 Shift。功能键 F1–F24 可单独使用，也可搭配
-Ctrl、Alt、Shift、Win；F12 为系统保留键。也可点击 **恢复默认**，再保存。
-在此设置窗口中，Tab / Shift+Tab 在输入框和按钮间移动焦点，Enter 保存当前
-快捷键，Esc 关闭窗口并放弃未保存的修改。
+同一个工作过程里，页面可能分散在 Chrome 和 Edge、多个窗口，以及工作和个人配置文件中。
+记得页面标题的一部分，却不记得它开在哪个窗口，是很常见的情况。逐个切换窗口、查看标签栏，
+会打断原本正在做的事。
 
-保存时会实际检查组合能否注册。如果已被其他程序或 Windows 占用，窗口会
-提示冲突，原快捷键继续有效；取消或保存失败不会覆盖原配置。设置会保存在
-当前 Windows 用户下，重启后仍有效，旧版预设会自动保留。
+Glint 把已连接配置文件中的标签页汇集到一个 Windows 搜索窗口。输入标题或网址片段，
+即可找到并回到原来的标签页和浏览器窗口。
 
-## 第一次连接
+![分散在不同浏览器、窗口和配置文件中的标签页汇集到 Glint 搜索的示意图](docs/assets/tab-overload.svg)
 
-从[最新发布页](https://github.com/new-sailfish/glint/releases/latest)直接下载 **Glint.exe** 即可，放在准备长期保留的位置。扩展运行所需的
-5 个运行文件和 4 个图标资源已内嵌在 EXE 中，连接向导会自动释放到
-`%LOCALAPPDATA%\Glint\browser-extension`，无需另外下载或整理扩展文件夹。
-**Glint-win-x64.zip** 是可选完整包，额外包含扩展文件和说明文档。
+## 功能与工作方式
 
-主窗口下方的浏览器状态表按 `chrome-配置文件名称`、`edge-配置文件名称`
-列出连接，显示已连接的配置文件数量和各自的标签页数。未命名的配置文件
-会显示编号，可在浏览器的 Glint 扩展面板中设置名称。当前运行期间见过的
-配置文件断开后会保留为“未连接”，不显示过期标签页数量。
+按 **Ctrl+Shift+Space** 呼出搜索，输入标题或网址片段，用方向键选择结果，按 **Enter**
+切换。Glint 会激活对应标签页并将所在窗口切到前台；窗口已最小化时会先恢复。
 
-点击 **连接新的浏览器** 打开带操作示意图的五步引导：
+![Glint 搜索窗口，展示来自 Chrome 和 Edge 配置文件的示例标签页](docs/assets/search.png)
 
-1. 选择 **Chrome** 或 **Edge**，点击 **下一步：打开扩展页**。
-   扩展已内置在 EXE 中，Glint 会自动释放文件
-   并注册当前用户的本机连接，无需管理员权限，无需填写扩展 ID。
-2. 点击 **打开浏览器并复制页面地址**。在打开的浏览器中选好要连接的
-   配置文件，再按 **Ctrl+L → Ctrl+V → 回车**，进入扩展管理页。
-   Chrome 的地址是 `chrome://extensions/`，Edge 是 `edge://extensions/`。
-   浏览器不允许外部程序直接打开这类内部页，因此需要这次粘贴。
-3. 在浏览器开启开发者模式。Chrome 的 **开发者模式** 开关在右上角；
-   Edge 的 **开发人员模式** 开关在左侧。回到 Glint，点击 **已开启，下一步**。
-4. 点击 **复制扩展文件夹路径**。在浏览器点击 **加载已解压的扩展程序**
-   （Chrome）或 **加载解压缩的扩展**（Edge）。
-   点击文件夹选择窗口底部的**文件夹**输入框，按 **Ctrl+V** 粘贴完整路径，
-   直接点击**选择文件夹**，无需先进入该目录。路径应为
-   `%LOCALAPPDATA%\Glint\browser-extension`，其中包含 `manifest.json`；不要选择上一级
-   `Glint` 目录。如果已经进入 `browser-extension` 而无法确认，请返回上一级，单击选中
-   `browser-extension`，再点击**选择文件夹**。
-5. 回到 Glint，点击 **已加载，检查连接**。收到所选浏览器的标签页
-   后，页面显示 **已连接**、配置文件和标签页数量，可点击 **开始搜索**。
-   连接成功页面只显示完成状态。需要继续设置时，点击 **连接新的浏览器**。
-   未连接时，页面显示 **未连接**；可点击 **连接遇到问题**，在单独的修复页
-   粘贴 Glint 扩展选项页的完整地址
-   （`chrome-extension://…/options.html`），或 32 位扩展 ID，点击
-   **保存 ID 并重试**；然后回扩展页点击**重试连接**。
+*原生界面离屏渲染，标签页使用示例数据。[图片来源说明](docs/assets/README.md)。*
 
-**两次复制用途不同：页面地址粘贴到浏览器地址栏；文件夹路径粘贴到加载
-扩展的文件夹选择窗口。** 每个需要搜索的浏览器配置文件都要分别加载扩展。
-Glint 可以自动准备文件和注册，但加载扩展这一步需要你在浏览器中操作。
-浏览器会从释放后的目录运行未打包扩展，请保留该目录。单 EXE 分发并不代表
-静默安装扩展；以后如发布应用商店版本，才能使用相应的商店安装入口。
+| 功能 | 使用方式 |
+| --- | --- |
+| 跨浏览器、跨配置文件搜索 | 在同一列表中查看已连接 Chrome、Edge 配置文件各窗口里的标签页。 |
+| 持续同步标签页 | 新建、关闭、标题和网址变化，以及窗口间移动，都会更新搜索索引。 |
+| 键盘操作 | 全局热键呼出、方向键选择、回车切换、Esc 隐藏；热键可以自定义。 |
+| 查看连接状态 | 状态表显示配置文件连接状态和标签页数量；可设置名称区分工作、个人等用途。 |
+| 本机通信 | 扩展通过本机通信桥发送标签页元数据；桌面搜索索引只保存在内存中，重启后重新同步。 |
 
-加载后直接回 Glint 检查连接，扩展不会强制打开新的引导标签页。以后点击
-工具栏中的 Glint 图标，会显示连接状态面板，可重试连接或设置配置文件名称。
-完整页面仍可从扩展详情里的 **扩展程序选项** 打开。
+扩展读取标签页的标题、网址、ID 和激活状态，不注入脚本，也不读取网页正文。
+搜索范围是已连接配置文件中打开的标签页，不包括书签和浏览历史。
 
-## 启动和退出
+## 安装配置与使用
 
-安装只做一次。此后启动 Glint，浏览器会自动同步标签页，无需每次点击连接。
-从托盘选择 **退出 Glint** 后，桌面 `Glint.exe` 退出，搜索窗口和热键停止。
-每个已安装扩展的浏览器配置文件会保留一个 `GlintBridge.exe` 等待桌面再次
-启动；它不拉起桌面，也不反复创建新进程。退出期间不保存标签页索引，桌面
-重启后重新获取完整快照。
+### 下载运行
 
-`GlintBridge.exe` 由程序在当前用户目录自动准备，内容与所下载的 EXE 相同，
-无需单独下载或安装运行库。关闭相应浏览器或禁用 Glint 扩展后，桥接进程
-随连接结束。要停止全部后台进程，请先禁用扩展，再退出桌面。
+下载 [**Glint.exe**](https://github.com/new-sailfish/glint/releases/latest/download/Glint.exe)，
+放在准备长期保留的位置并运行。系统要求为 **Windows 10/11 x64**、**Chrome 或 Edge 105+**，
+无需管理员权限，也无需另装 Visual C++ 运行库。
 
-## 旧版升级
+浏览器扩展已内嵌在 EXE 中，由程序自动准备。
+[完整 ZIP 包](https://github.com/new-sailfish/glint/releases/latest/download/Glint-win-x64.zip)
+额外提供扩展文件和说明文档，可按需下载。
 
-**升级到扩展 0.1.6：** 从托盘退出旧版 Glint 后启动新版 EXE，再在每个浏览器
-的扩展管理页，对已有 Glint 卡片点击一次**重新加载**，应用统一图标和新版状态面板。
-扩展 ID 和现有加载路径不变。
+### 按五步引导连接浏览器
 
-**升级到扩展 0.1.5：** 从托盘退出旧版 Glint 后启动新版 EXE，再在每个浏览器
-的扩展管理页对 Glint 卡片点击一次**重新加载**。本次修复标签页窗口短暂前置
-后又被其他窗口盖住的问题；切换后会确认焦点保持稳定，交接期间丢失焦点时
-会在短时间内有限重试。扩展 ID 和已加载的文件夹路径不变。
+在 Glint 点击 **连接新的浏览器**：
 
-**升级到扩展 0.1.4：** 启动新版 EXE 后，在每个浏览器的扩展管理页对已有
-Glint 卡片点击一次**重新加载**，无需重装或修改 ID。后续 Glint 启停会自动
-恢复连接。状态面板只有收到桌面确认才显示绿色；后台仍为旧版或缺少状态
-字段时，会显示**扩展需要重新加载**，请重新加载卡片使新版后台生效。
+1. **选择 Chrome 或 Edge。** 点击 **下一步：打开扩展页**。Glint 会准备
+   `%LOCALAPPDATA%\Glint\browser-extension`，并为所选浏览器注册当前用户的本机通信桥。
+   使用内置扩展时无需填写 ID。
+2. **打开扩展管理页。** 点击 **打开浏览器并复制页面地址**。在浏览器中选择要接入的
+   配置文件，按 **Ctrl+L → Ctrl+V → 回车** 进入复制的地址：
+   Chrome 为 `chrome://extensions/`，Edge 为 `edge://extensions/`。
+3. **开启开发者模式。** Chrome 的 **开发者模式** 开关在页面右上角；Edge 的
+   **开发人员模式** 开关在左侧。开启后回到 Glint，继续下一步。
+4. **加载扩展文件夹。** 在 Glint 点击 **复制扩展文件夹路径**，再到浏览器点击
+   **加载已解压的扩展程序**（Chrome）或 **加载解压缩的扩展**（Edge）。将路径粘贴到
+   文件夹选择窗口底部的 **文件夹** 输入框，直接点击 **选择文件夹**。
+   应选择包含 `manifest.json` 的 `browser-extension` 文件夹，不要选择上一级目录。
+5. **确认同步成功。** 回到 Glint，点击 **已加载，检查连接**。
+   页面显示 **已连接**、配置文件和标签页数量后，点击 **开始搜索**。
 
-**升级到扩展 0.1.3：** 更新 EXE 后，在每个浏览器的扩展管理页对 Glint
-点击一次重新加载。这是本次升级所需的一次操作；此后每次启动 Glint 都会
-自动连接，不必点击重试。正常启动 EXE 也会更新内置扩展文件，无需重新走
-安装向导。扩展 ID 不变。
+| 选择浏览器 | 加载扩展文件夹 | 确认连接 |
+| --- | --- | --- |
+| ![Glint 的浏览器选择页面](docs/assets/setup-browser.png) | ![Glint 的扩展文件夹加载说明](docs/assets/setup-load.png) | ![Glint 确认浏览器已连接并同步](docs/assets/setup-connected.png) |
 
-**升级到扩展 0.1.2：** 更新 EXE 后，在浏览器扩展管理页的 Glint 卡片上点击
-重新加载，使窗口置顶和标签关闭同步修复生效。若已从项目的
-`dist\browser-extension` 目录加载，继续使用该目录，无需重新填写 ID。
-窗口切换现在会检查实际焦点；Windows 拒绝置顶时会给出失败提示。
+**每个需要搜索的浏览器配置文件都要分别加载扩展。** 当前使用“加载已解压的扩展程序”安装，
+没有浏览器商店安装入口。浏览器会从释放后的目录运行扩展，请保留 `browser-extension` 目录。
+两次复制的用途不同：页面地址粘贴到浏览器地址栏，文件夹路径粘贴到文件夹选择窗口。
 
-扩展 0.1.1 使用新目录 `%LOCALAPPDATA%\Glint\browser-extension`。重新运行
-连接向导，并在每个浏览器配置文件中从新目录**加载已解压的扩展程序**一次。
-Chrome 中 Glint 卡片已经消失时，直接加载新目录即可；Edge 如需新的工具栏
-状态面板，也要加载新目录一次。同一固定公钥 ID 的现有扩展会更新加载路径，
-无需先移除。Glint 保留旧 `%LOCALAPPDATA%\Glint\extension` 目录，不覆盖、不删除。
+如果浏览器未自动打开，请自行打开并输入对应的扩展管理页地址。连接失败时，可在向导中点击
+**连接遇到问题**；进一步排查见[详细使用指南（英文）](docs/user-guide.md#connection-troubleshooting)。
 
-从新目录加载后，请正常关闭并重开浏览器，确认 Glint 卡片仍在。若无公钥的
-旧版扩展仍可见，可选择移除；移除可能清除已设的
-配置文件名称。其他目录中的旧扩展仍可在向导的修复页粘贴实际扩展地址来注册。
+### 搜索与快捷键配置
 
-## 重新打开向导和排查
+| 按键或操作 | 作用 |
+| --- | --- |
+| `Ctrl+Shift+Space` | 使用默认全局热键呼出搜索。 |
+| 输入标题或网址片段 | 筛选已连接的标签页。 |
+| 搜索框中按 `↓` | 选择第一条结果。 |
+| 第一条结果上按 `↑` | 返回搜索框，保留文字和光标位置。 |
+| `Enter` / `Esc` | 激活选中标签页 / 隐藏搜索。 |
+| 托盘 → **配置全局热键** | 录入并保存新的快捷键。 |
 
-- 从 Glint 托盘菜单选择 **连接浏览器**，或运行 `Glint.exe --setup`。
-- 浏览器没有打开时，自行打开 Chrome/Edge，手动输入对应的扩展页地址。
-- 确认扩展列表中已出现 Glint 且处于启用状态；可重新加载扩展，或点击工具栏
-  中的 Glint 图标，在状态面板中点击 **重试连接**。桌面向导显示实际同步结果。
-- 更换 EXE 位置后，正常启动即可更新已有通信桥配置；更新失败时会给出提示，
-  可重新走向导修复。
-- 确认页显示未连接时，点击 **连接遇到问题**，粘贴扩展选项页完整地址或 ID，再点击
-  **保存 ID 并重试**。这会更新所选浏览器的本机注册，不代表已经收到标签页。
-  注册后仍提示 `Specified native messaging host not found` 时，说明浏览器
-  未找到本机通信桥；请保留完整错误以继续排查，不必反复修改同一个 ID。
+<img src="docs/assets/hotkey.png" alt="Glint 全局热键设置窗口" width="560">
 
-内置扩展的公钥 ID 为 `pecljnjkgandbbelbajkppllibpehhpe`。
-自动注册的本机连接只允许两个明确来源：公钥 ID 和旧目录
-`%LOCALAPPDATA%\Glint\extension` 的路径 ID，不使用通配符。高级设置或命令行
-手动注册时，仅允许该浏览器填写的单个 ID。
+点击浏览器工具栏中的 Glint 图标，可查看连接状态并设置配置文件名称。
+关闭搜索窗口后，程序仍在托盘运行。从托盘选择 **退出 Glint** 会停止桌面程序和热键；
+浏览器管理的通信桥会等待下次启动。完整的快捷键规则、进程生命周期、旧版升级、
+手动注册和卸载方法见[详细使用指南（英文）](docs/user-guide.md)。
 
-**为什么安装前就知道 ID？** 浏览器根据扩展 `manifest.json` 中的公钥生成 ID。
-同一公钥得到同一 ID，因此这份内置扩展在不同机器上仍使用上述固定 ID。
-没有公钥的未打包扩展通常按安装目录生成 ID，换机器或目录可能改变；应用商店
-版本也应以实际分配的 ID 为准。Glint 的固定值只适用于随程序提供的公钥，
-并不代表任意版本都有同一个 ID；遇到差异，可在修复页粘贴实际扩展地址。
+## 开发与构建
 
-## 开发构建与测试
-
+桌面端使用 **C++20 和 Win32**，Chrome 与 Edge 共用 **Manifest V3 扩展**。
 在 VS 2022 x64 开发者环境中使用 PowerShell 7、CMake 3.21+ 和 Node.js 22+。
-扩展没有需要安装的第三方依赖。使用统一 Release 门禁：
+扩展采用 Node 内置测试运行器，无需安装第三方包。
+
+![浏览器扩展通过 GlintBridge 与桌面搜索窗口进行本机通信的架构图](docs/assets/architecture.svg)
+
+每个浏览器配置文件使用同一份扩展。浏览器管理的 `GlintBridge.exe` 通过 Native Messaging
+和当前 Windows 用户的命名管道连接桌面程序。通信桥由下载的 EXE 自动准备。
+实现细节见[设计说明](docs/design.md)和[通信协议](docs/protocol.md)。
+
+```powershell
+cmake --preset release
+cmake --build --preset release --parallel
+.\scripts\test-changed.ps1
+```
+
+交付 Release 前，退出正在运行的桌面程序，再执行完整验证与打包：
 
 ```powershell
 .\scripts\check-release.ps1
 ```
 
-它会依次配置、构建、运行完整 CTest、扩展测试、桌面/桥接生命周期 smoke、
-导入检查，并发布和校验 `dist/` 与 ZIP。Pull Request 可以先运行
-`.\scripts\test-changed.ps1 -List` 查看按改动选择的测试；这是开发加速手段，
-发布前仍执行完整 Release 门禁。专注于已有构建时，可向 `check-release.ps1`
-传入对应的 `-Skip...` 参数；跳过验证项时必须同时传入 `-SkipPackage`，
-避免局部检查误发布。生命周期 smoke 运行前应退出桌面程序。
-
-### 自动版本号
-
-桌面程序每次构建递增补丁号：`0.1.0` → `0.1.1` → `0.1.2`。
-`VERSION` 设置人工维护的版本下限。每次构建包含 `glint` 目标时都会领取下一个号码，
-即使其他源码没有改动；仅配置 CMake、只构建测试目标或重新打包不会递增。
-失败构建用掉的号码不回退，因此号码可以有间隔。
-
-本地计数保存在已忽略的 `.local/build-version/`，Debug 和 Release 共用，
-删除 `build/` 不会重置。请保留该目录以延续本地计数；计数损坏或超出范围会明确报错。
-CI 使用独立计数：脚本检查通过后，通过创建 `build-version/0.1.N` 标签原子地领取
-下一个补丁号，重新运行也会领取新号。这些标签只是构建编号记录，不是 Releases，
-不要删除它们以免影响计数。PR 使用隔离的本地预览计数，不能写入构建标签；
-`master`/`main` 或手动触发的正式构建成功后，会自动创建 `v<构建版本>` Release，
-附上 EXE、ZIP 和版本/哈希清单，无需手动推送标签；失败构建和 PR 不发布。
-
-窗口标题、托盘提示和 EXE 属性都显示产品版本。Windows 数字文件版本为 `0.1.N.0`，
-发布清单直接读取打包 EXE 的版本，记录产品版本和文件版本。
-本地与 CI 可以出现相同号码，请结合清单中的提交和哈希识别具体构建。
-浏览器扩展版本和 Native Messaging 协议版本独立维护；自动生成文件位于 `build/`，
-不会改动已提交的源码。
-
-改动 C++ 后先构建 Release，再执行 `.\scripts\test-changed.ps1`。
-选测脚本不会编译；可用 `-Base <ref>`、`TEST_BASE` 或明确文件路径控制范围：
-
-```powershell
-.\scripts\test-changed.ps1 src/hotkey.cpp extension/options.js
-```
-
-CI 固定使用 `windows-2022` 和 VS 2022，与 CMake 预设匹配。PR 和正式构建运行
-脚本检查、不依赖桌面的 CTest（`-LE desktop`）及扩展测试；正式构建还校验依赖、打包并直接发布到 GitHub Releases。
-窗口尺寸、DPI、焦点、全局热键及桌面生命周期检查保留在本地完整的 `check-release.ps1`
-发布门禁中，不依赖 CI 虚拟桌面的显示设置。仅文档改动跳过 CI。发布清单 `dist/release-manifest.json`
-记录版本、提交、未提交改动状态及各文件 SHA-256，发布脚本清除受管理目录中的旧文件，
-保留已安装扩展使用的 `dist/browser-extension` 路径。
-
-发布包中的文档由 `scripts/package-release.ps1` 明确列出，包括架构、协议、
-品牌说明和 README 图片。本地讨论稿、浏览器快照和按日期记录的验证日志
-不纳入 Git 或发布包；新增需要随程序分发的公开文档时，应同步更新打包清单。
-
-## 卸载
-
-1. 在 Chrome/Edge 的每个配置文件中移除 Glint 扩展。
-2. 运行 `Glint.exe --unregister`，删除当前用户的 Native Messaging 注册。
-3. 从托盘退出 Glint，再删除程序文件和 `%LOCALAPPDATA%\Glint` 目录。
-
-开发构建、源码结构和协议详见 [README.md](README.md)、
-[扩展说明](extension/README.md) 和 [设计说明](docs/design.md)。
+可用程序位于 `dist/Glint.exe`，同时生成 `Glint-win-x64.zip` 和版本、哈希清单。
+选测、版本号分配、CI、打包和源码结构见[开发指南（英文）](docs/development.md)。
+另见[扩展说明](extension/README.md)、[设计说明](docs/design.md)和[通信协议](docs/protocol.md)。
