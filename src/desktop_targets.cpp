@@ -25,6 +25,11 @@ using Microsoft::WRL::ComPtr;
 namespace glint::desktop {
 namespace {
 
+std::int64_t access_time_now() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
 std::wstring lower(std::wstring_view input) {
     std::wstring value(input);
     std::transform(value.begin(), value.end(), value.begin(), [](wchar_t c) {
@@ -398,6 +403,8 @@ BOOL CALLBACK enumerate_window(HWND window, LPARAM parameter) {
 struct ScanResult {
     std::vector<Tab> targets;
     bool uia_retryable = false;
+    HWND foreground_window = nullptr;
+    std::int64_t foreground_observed_at = 0;
 };
 
 ScanResult scan_windows(
@@ -407,10 +414,13 @@ ScanResult scan_windows(
     context.own_process_id = GetCurrentProcessId();
     context.shell_window = GetShellWindow();
     context.foreground_window = GetForegroundWindow();
+    const auto foreground_observed_at = access_time_now();
     context.descriptions = &descriptions;
     EnumWindows(enumerate_window, reinterpret_cast<LPARAM>(&context));
 
     ScanResult result;
+    result.foreground_window = context.foreground_window;
+    result.foreground_observed_at = foreground_observed_at;
     for (auto& window : context.windows) {
         auto application = application_name(window.facts.image_name, window.file_description);
         if (application.empty()) application = window.facts.class_name;
@@ -704,6 +714,32 @@ std::vector<Tab> search_targets(
     return result;
 }
 
+void TargetRecencyTracker::update(
+    std::span<Tab> targets, HWND foreground_window, std::int64_t now) {
+    std::optional<TabKey> foreground;
+    // A scan can finish after a more recent direct foreground observation.
+    // Merge its rows with history without letting its old focus sample win.
+    if (now >= latest_observation_) {
+        for (auto& target : targets) {
+            if (foreground_window && (target.key.source == TabSource::Window || target.active) &&
+                target.window_handle == reinterpret_cast<std::uintptr_t>(foreground_window)) {
+                foreground = target.key;
+                if (foreground != foreground_target_ && now > 0) {
+                    auto& previous = access_times_[target.key.target_id];
+                    previous = (std::max)(previous, now);
+                }
+                break;
+            }
+        }
+        foreground_target_ = std::move(foreground);
+        latest_observation_ = now;
+    }
+    for (auto& target : targets) {
+        const auto found = access_times_.find(target.key.target_id);
+        target.last_accessed = found == access_times_.end() ? 0 : found->second;
+    }
+}
+
 class DesktopTargetService::Impl : public std::enable_shared_from_this<DesktopTargetService::Impl> {
 public:
     ~Impl() { stop(); }
@@ -747,18 +783,24 @@ public:
         }
     }
 
-    std::vector<Tab> search(std::wstring_view query) const {
+    std::vector<Tab> search(std::wstring_view query, std::size_t limit) const {
         std::vector<Tab> targets;
         {
             std::lock_guard lock(mutex_);
             targets = targets_;
         }
-        return search_targets(targets, query);
+        return search_targets(targets, query, limit);
     }
 
     std::size_t target_count() const {
         std::lock_guard lock(mutex_);
         return targets_.size();
+    }
+
+    void observe_foreground(HWND foreground_window) {
+        const auto observed_at = access_time_now();
+        std::lock_guard lock(mutex_);
+        recency_.update(targets_, foreground_window, observed_at);
     }
 
     bool request_activation(const Tab& target) {
@@ -780,13 +822,14 @@ public:
     }
 
 private:
-    void publish(std::vector<Tab> next) {
+    void publish(ScanResult next) {
         bool changed = false;
         HWND notification_window = nullptr;
         {
             std::lock_guard lock(mutex_);
-            if (next != targets_) {
-                targets_ = std::move(next);
+            recency_.update(next.targets, next.foreground_window, next.foreground_observed_at);
+            if (next.targets != targets_) {
+                targets_ = std::move(next.targets);
                 changed = true;
             }
             notification_window = notification_window_;
@@ -841,7 +884,7 @@ private:
                 automation = create_automation();
                 if (automation) next = scan_windows(automation.Get(), descriptions);
             }
-            publish(std::move(next.targets));
+            publish(std::move(next));
             std::unique_lock lock(mutex_);
             if (!running_) break;
             activation_ready_.wait_for(lock, std::chrono::seconds(1), [this] {
@@ -864,6 +907,7 @@ private:
     std::condition_variable activation_ready_;
     std::condition_variable finished_changed_;
     std::vector<Tab> targets_;
+    TargetRecencyTracker recency_;
     std::deque<Tab> activations_;
     std::vector<std::wstring> activation_errors_;
     bool running_ = false;
@@ -874,10 +918,11 @@ DesktopTargetService::DesktopTargetService() : impl_(std::make_shared<Impl>()) {
 DesktopTargetService::~DesktopTargetService() { impl_->stop(); }
 void DesktopTargetService::start(HWND window, UINT message) { impl_->start(window, message); }
 void DesktopTargetService::stop() { impl_->stop(); }
-std::vector<Tab> DesktopTargetService::search(std::wstring_view query) const {
-    return impl_->search(query);
+std::vector<Tab> DesktopTargetService::search(std::wstring_view query, std::size_t limit) const {
+    return impl_->search(query, limit);
 }
 std::size_t DesktopTargetService::target_count() const { return impl_->target_count(); }
+void DesktopTargetService::observe_foreground(HWND foreground_window) { impl_->observe_foreground(foreground_window); }
 bool DesktopTargetService::request_activation(const Tab& target) {
     return impl_->request_activation(target);
 }

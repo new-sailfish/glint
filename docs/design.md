@@ -112,6 +112,25 @@ PageUp (`VK_PRIOR`) also return from the first result, covering Fn+Up when a
 keyboard maps it to either key. Elsewhere in the list they retain native
 jump-to-first/page-up behavior; in the query they retain native editing behavior.
 
+An empty query uses the same native list-view in tile mode, with up to six
+recently accessed targets selected after merging all browser and desktop rows.
+The normal width uses two columns; narrow viewports use one. Tab/Shift+Tab cycle
+cards, arrows move through the grid, and Enter or a card click uses the existing
+activation path. Navigation keeps the native EDIT ready for typing. Text input
+from a focused result transfers to the EDIT before IME processing; composing
+keys always take precedence over application shortcuts. A nonempty query uses
+the report view and selects its first match without taking the editing caret.
+Ctrl+F selects the query, F6 moves between search and connection controls, and
+F2 expands/collapses the connection details. Each invocation clears the query.
+
+The optional protocol `lastAccessed` field carries epoch milliseconds and
+defaults to zero for older extensions. Browser API access times are merged with
+real activation/window-focus events; metadata refreshes do not create visits.
+Desktop discovery records changes of the foreground target, including the
+selected Notepad tab only when its window is foreground. This history lives in
+the current process and follows the existing one-second discovery cadence.
+Unknown times sort after known visits with a deterministic identity fallback.
+
 Result refreshes select the first match for a changed query or a newly opened
 search. Background updates preserve the selected connection/tab identity when
 it remains in the filtered rows. Selection never takes keyboard focus from the
@@ -145,13 +164,15 @@ All runtime dependencies are Windows system DLLs; Release uses `/MT`.
 
 ## Browser connection guide
 
-The search window includes a browser connection table, with one row per
+The search window normally shows a compact one-line connection status bar and
+a secondary **Connect browser** action. Clicking the status or pressing F2
+reveals the browser connection table, with one row per
 profile named `chrome-{label}` or `edge-{label}`, its state and current tab count.
 Unnamed profiles receive a stable number for the current desktop session.
 Counts include only synchronized profiles. Profiles seen during this session
 remain visible as disconnected after their browser closes, without stale tab
 counts; reconnects replace the same browser/profile row rather than duplicating it.
-Normal startup opens this overview. The **连接新的浏览器** action opens the guide;
+Normal startup opens recent cards with connection details collapsed. The **连接新的浏览器** action opens the guide;
 `--setup` and the tray action remain direct entry points.
 
 The native guide has five illustrated stages: choose one browser, open its

@@ -12,6 +12,22 @@ void require(bool condition, const char* message) {
     if (!condition) throw std::runtime_error(message);
 }
 
+class Keyboard {
+public:
+    Keyboard() { require(GetKeyboardState(original_) != FALSE, "snapshot thread keyboard state"); }
+    ~Keyboard() { SetKeyboardState(original_); }
+    void set(UINT modifiers = 0) {
+        BYTE keys[256]{};
+        if (modifiers & MOD_CONTROL) keys[VK_CONTROL] = keys[VK_LCONTROL] = 0x80;
+        if (modifiers & MOD_ALT) keys[VK_MENU] = keys[VK_LMENU] = 0x80;
+        if (modifiers & MOD_SHIFT) keys[VK_SHIFT] = keys[VK_LSHIFT] = 0x80;
+        if (modifiers & MOD_WIN) keys[VK_LWIN] = 0x80;
+        require(SetKeyboardState(keys) != FALSE, "set test thread keyboard state");
+    }
+private:
+    BYTE original_[256]{};
+};
+
 class SearchControls {
 public:
     explicit SearchControls(int result_count = 3) {
@@ -111,6 +127,21 @@ public:
         input.wParam = key;
         input.lParam = 1;
         return glint::handle_search_key(input, edit, list, input_method, [this] { ++activations; });
+    }
+
+    bool route_typing(UINT key, UINT message = WM_CHAR) {
+        MSG input{};
+        input.hwnd = GetFocus();
+        input.message = message;
+        input.wParam = key;
+        input.lParam = 1;
+        return glint::handle_search_typing(input, edit, list);
+    }
+
+    void require_edit_text(std::wstring_view expected) const {
+        wchar_t value[64]{};
+        GetWindowTextW(edit, value, static_cast<int>(std::size(value)));
+        require(std::wstring_view(value) == expected, "native EDIT contains the expected input");
     }
 
     HWND edit = nullptr, list = nullptr, unrelated = nullptr;
@@ -352,6 +383,172 @@ void search_key_routing_leaves_ordinary_keys_and_unrelated_focus_alone() {
     controls.focus(controls.unrelated);
     require(!controls.route_key(VK_RETURN), "unrelated controls keep their own Enter behavior");
     require(controls.activations == 0 && controls.edit_keydowns == 0, "ordinary routing causes no side effects");
+}
+
+void recent_tab_cycles_both_directions_without_leaving_edit() {
+    Keyboard keyboard; keyboard.set();
+    SearchControls controls(6);
+    controls.select(0);
+    controls.focus(controls.edit);
+    controls.set_edit_selection(2, 7);
+    for (int step = 1; step <= 7; ++step) {
+        require(glint::navigate_recent_results(controls.edit, controls.list, VK_TAB), "Tab cycles recent cards");
+        controls.require_selection(step % 6);
+        require(GetFocus() == controls.edit, "cycling keeps typing focus in EDIT");
+        controls.require_edit_unchanged(2, 7);
+    }
+    keyboard.set(MOD_SHIFT);
+    for (const int expected : {0, 5, 4}) {
+        require(glint::navigate_recent_results(controls.edit, controls.list, VK_TAB, true), "Shift+Tab reverses recent cards");
+        controls.require_selection(expected);
+        require(GetFocus() == controls.edit, "reverse cycling keeps typing focus in EDIT");
+    }
+    require(controls.route_key(VK_RETURN) && controls.activations == 1, "Enter activates the selected recent card from EDIT");
+}
+
+void recent_navigation_returns_list_focus_and_preserves_caret() {
+    Keyboard keyboard; keyboard.set();
+    SearchControls controls(6);
+    controls.select(2);
+    controls.focus(controls.list);
+    controls.set_edit_selection(3, 7);
+    require(glint::navigate_recent_results(controls.edit, controls.list, VK_TAB), "Tab from clicked cards advances selection");
+    controls.require_selection(3);
+    require(GetFocus() == controls.edit, "card navigation returns keyboard focus to search");
+    controls.require_edit_unchanged(3, 7);
+    require(!controls.route_typing(L'x'), "ordinary input in EDIT uses native dispatch after cycling");
+    SendMessageW(controls.edit, WM_CHAR, L'x', 1);
+    controls.require_edit_text(L"quexext");
+}
+
+void recent_navigation_handles_empty_single_and_missing_selection() {
+    Keyboard keyboard; keyboard.set();
+    for (const int count : {0, 1}) {
+        SearchControls controls(count);
+        for (const HWND focused : {controls.edit, controls.list}) {
+            controls.focus(focused);
+            for (const bool reverse : {false, true}) {
+                require(glint::navigate_recent_results(controls.edit, controls.list, VK_TAB, reverse), "recent Tab handles empty or single results");
+                require(GetFocus() == controls.edit, "empty or single recent navigation leaves EDIT ready");
+                if (count) controls.require_selection(0);
+                else require(ListView_GetSelectedCount(controls.list) == 0, "empty recent results have no selection");
+            }
+        }
+    }
+    SearchControls controls(6);
+    controls.focus(controls.edit);
+    require(glint::navigate_recent_results(controls.edit, controls.list, VK_TAB), "Tab chooses first without prior selection");
+    controls.require_selection(0);
+    controls.select(-1);
+    require(glint::navigate_recent_results(controls.edit, controls.list, VK_TAB, true), "reverse Tab chooses last without prior selection");
+    controls.require_selection(5);
+}
+
+void recent_arrows_follow_grid_and_clamp_at_edges() {
+    Keyboard keyboard; keyboard.set();
+    SearchControls controls(5);
+    controls.focus(controls.edit);
+    controls.select(0);
+    for (const auto& [key, selected] : {std::pair<UINT, int>{VK_LEFT, 0}, {VK_UP, 0},
+            {VK_RIGHT, 1}, {VK_RIGHT, 1}, {VK_DOWN, 3}, {VK_DOWN, 4}, {VK_DOWN, 4},
+            {VK_RIGHT, 4}, {VK_LEFT, 4}, {VK_UP, 2}, {VK_UP, 0}}) {
+        require(glint::navigate_recent_results(controls.edit, controls.list, key), "recent arrows follow two-column grid");
+        controls.require_selection(selected);
+        require(GetFocus() == controls.edit, "grid movement keeps EDIT focus");
+    }
+    controls.select(0);
+    require(glint::navigate_recent_results(controls.edit, controls.list, VK_DOWN, false, 3), "column count follows card layout");
+    controls.require_selection(3);
+    require(glint::navigate_recent_results(controls.edit, controls.list, VK_DOWN, false, 0), "invalid column count safely uses one column");
+    controls.require_selection(4);
+}
+
+void recent_navigation_preserves_shortcuts_and_unrelated_focus() {
+    Keyboard keyboard; keyboard.set();
+    SearchControls controls;
+    controls.select(1);
+    controls.focus(controls.unrelated);
+    for (const UINT key : {VK_TAB, VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN})
+        require(!glint::navigate_recent_results(controls.edit, controls.list, key), "recent navigation does not take unrelated focus");
+    controls.focus(controls.edit);
+    for (const UINT key : {VK_RETURN, VK_ESCAPE, VK_HOME, VK_END, 0x41})
+        require(!glint::navigate_recent_results(controls.edit, controls.list, key), "non-card keys remain with caller");
+    for (const UINT modifiers : {MOD_CONTROL, MOD_ALT, MOD_WIN}) {
+        keyboard.set(modifiers);
+        require(!glint::navigate_recent_results(controls.edit, controls.list, VK_TAB), "modified Tab remains a command shortcut");
+        require(!glint::navigate_recent_results(controls.edit, controls.list, VK_DOWN), "modified arrows remain command shortcuts");
+    }
+    controls.require_selection(1);
+}
+
+void input_method_owns_tab_before_recent_navigation() {
+    Keyboard keyboard; keyboard.set();
+    SearchControls controls;
+    controls.select(0);
+    controls.focus(controls.edit);
+    SendMessageW(controls.edit, WM_IME_STARTCOMPOSITION, 0, 0);
+    require(controls.route_key(VK_TAB), "IME consumes Tab before recent-card routing");
+    controls.require_selection(0);
+    require(controls.edit_keydowns == 1 && GetFocus() == controls.edit, "IME Tab reaches EDIT without moving card selection");
+    SendMessageW(controls.edit, WM_IME_ENDCOMPOSITION, 0, 0);
+    require(!controls.route_key(VK_TAB), "ordinary Tab leaves IME routing after composition");
+    require(glint::navigate_recent_results(controls.edit, controls.list, VK_TAB), "ordinary Tab resumes card navigation");
+    controls.require_selection(1);
+}
+
+void list_printable_characters_resume_native_search_editing() {
+    Keyboard keyboard; keyboard.set();
+    for (const UINT character : {static_cast<UINT>(L'x'), static_cast<UINT>(L'中'), static_cast<UINT>(L' ')}) {
+        SearchControls controls;
+        controls.select(1);
+        controls.set_edit_selection(0, 10);
+        controls.focus(controls.list);
+        require(controls.route_typing(character), "list printable character is redirected to EDIT");
+        require(GetFocus() == controls.edit, "typing from results restores EDIT focus");
+        controls.require_edit_text(std::wstring(1, static_cast<wchar_t>(character)));
+        controls.require_selection(1);
+    }
+}
+
+void list_typing_transfers_focus_before_translation_and_ime() {
+    Keyboard keyboard; keyboard.set();
+    for (const UINT key : {VK_SPACE, VK_PROCESSKEY, VK_PACKET}) {
+        SearchControls controls;
+        controls.set_edit_selection(0, 10);
+        controls.focus(controls.list);
+        require(controls.route_typing(key, WM_KEYDOWN), "text or IME key transfers focus before native translation");
+        require(GetFocus() == controls.edit && controls.edit_keydowns == 1, "first typing key reaches native EDIT exactly once");
+        MSG translated{};
+        while (PeekMessageW(&translated, controls.edit, WM_CHAR, WM_CHAR, PM_REMOVE)) DispatchMessageW(&translated);
+        if (key == VK_SPACE) controls.require_edit_text(L" ");
+        if (key == VK_PROCESSKEY) {
+            SendMessageW(controls.edit, WM_IME_STARTCOMPOSITION, 0, 0);
+            require(controls.route_key(VK_RETURN), "IME retains Enter after switching from results");
+            require(controls.activations == 0, "IME confirmation from results does not activate a result");
+        }
+    }
+}
+
+void list_typing_preserves_control_shortcuts_and_nontext_messages() {
+    Keyboard keyboard; keyboard.set();
+    SearchControls controls;
+    controls.focus(controls.list);
+    controls.select(1);
+    for (const UINT key : {VK_TAB, VK_RETURN, VK_ESCAPE, VK_UP, VK_DOWN, VK_HOME, VK_END, VK_F6})
+        require(!controls.route_typing(key, WM_KEYDOWN), "non-text key keeps list command behavior");
+    for (const UINT character : {0x01u, 0x06u, 0x09u, 0x0du, 0x1bu, 0x7fu})
+        require(!controls.route_typing(character), "control character is not mistaken for typed search text");
+    for (const UINT modifiers : {MOD_CONTROL, MOD_ALT, MOD_WIN}) {
+        keyboard.set(modifiers);
+        require(!controls.route_typing(0x46, WM_KEYDOWN), "Ctrl/Alt/Win commands are left for app routing");
+        require(!controls.route_typing(L'f'), "modified characters do not trigger typing redirect");
+        require(GetFocus() == controls.list, "command routing preserves list focus");
+    }
+    keyboard.set();
+    controls.focus(controls.unrelated);
+    require(!controls.route_typing(L'x'), "typing from another control never jumps to search");
+    controls.require_selection(1);
+    require(controls.edit_keydowns == 0, "ignored messages never dispatch extra EDIT keys");
 }
 
 void up_from_first_returns_to_query() {
@@ -609,6 +806,15 @@ int main() {
         {"Enter without results reaches native EDIT", enter_without_results_reaches_native_edit},
         {"IME owns navigation and Escape while edit has focus", input_method_owns_navigation_and_escape_until_focus_leaves_edit},
         {"Key routing preserves ordinary keys and unrelated focus", search_key_routing_leaves_ordinary_keys_and_unrelated_focus_alone},
+        {"Recent Tab cycles both directions without leaving EDIT", recent_tab_cycles_both_directions_without_leaving_edit},
+        {"Recent navigation returns list focus and preserves caret", recent_navigation_returns_list_focus_and_preserves_caret},
+        {"Recent navigation handles empty, single and missing selection", recent_navigation_handles_empty_single_and_missing_selection},
+        {"Recent arrows follow grid and clamp at edges", recent_arrows_follow_grid_and_clamp_at_edges},
+        {"Recent navigation preserves shortcuts and unrelated focus", recent_navigation_preserves_shortcuts_and_unrelated_focus},
+        {"IME owns Tab before recent navigation", input_method_owns_tab_before_recent_navigation},
+        {"List printable characters resume native search editing", list_printable_characters_resume_native_search_editing},
+        {"List typing transfers focus before translation and IME", list_typing_transfers_focus_before_translation_and_ime},
+        {"List typing preserves shortcuts and nontext messages", list_typing_preserves_control_shortcuts_and_nontext_messages},
         {"Up from first returns to query", up_from_first_returns_to_query},
         {"Up from second selects previous", up_from_second_selects_previous},
         {"Down from last stays at last", down_from_last_stays_at_last},

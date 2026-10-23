@@ -5,7 +5,9 @@
 #include <windows.h>
 
 #include <cstdint>
+#include <map>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -45,6 +47,18 @@ struct WindowFacts {
 [[nodiscard]] std::vector<Tab> search_targets(
     std::span<const Tab> targets, std::wstring_view query, std::size_t limit = 1000);
 
+// Tracks visits during this desktop session. UIA selected state counts only
+// inside the foreground window; unchanged scans do not create new visits.
+class TargetRecencyTracker {
+public:
+    void update(std::span<Tab> targets, HWND foreground_window, std::int64_t now);
+
+private:
+    std::map<std::wstring, std::int64_t> access_times_;
+    std::optional<TabKey> foreground_target_;
+    std::int64_t latest_observation_ = 0;
+};
+
 // Owns background Win32/UIA discovery. The UI receives one notification for a
 // changed snapshot or an activation failure and otherwise never waits on UIA.
 class DesktopTargetService {
@@ -56,8 +70,11 @@ public:
 
     void start(HWND notification_window, UINT notification_message);
     void stop();
-    [[nodiscard]] std::vector<Tab> search(std::wstring_view query) const;
+    [[nodiscard]] std::vector<Tab> search(std::wstring_view query, std::size_t limit = 1000) const;
     [[nodiscard]] std::size_t target_count() const;
+    // Call before Glint takes foreground focus. Updates only the cached
+    // targets, without waiting for enumeration or cross-process UI Automation.
+    void observe_foreground(HWND foreground_window);
     // Queues activation after the caller grants foreground permission and
     // hides Glint. The worker reports failures through take_activation_errors.
     [[nodiscard]] bool request_activation(const Tab& target);

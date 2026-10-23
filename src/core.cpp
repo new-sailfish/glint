@@ -283,6 +283,8 @@ Tab parse_tab(const Json& item, ConnectionId id, const ConnectionInfo& info) {
     tab.profile_label = info.profile_label;
     tab.active = bool_field(item, "active");
     tab.pinned = bool_field(item, "pinned");
+    tab.last_accessed = integer_field(item, "lastAccessed", false);
+    if (tab.last_accessed < 0) fail("lastAccessed must be nonnegative");
     return tab;
 }
 

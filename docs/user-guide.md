@@ -29,7 +29,9 @@ Load and enable the extension in every Chrome or Edge profile whose tabs should
 be searchable. Each profile has its own connection; installing the extension in
 a work profile does not expose tabs in a personal profile.
 
-The desktop table lists profiles as `chrome-{label}` or `edge-{label}`, with
+The bottom status bar summarizes connected profiles. Click the summary or press
+`F2` to expand or collapse the connection table. **Connect browser** remains
+available beside it. The table lists profiles as `chrome-{label}` or `edge-{label}`, with
 their connection state and synchronized tab count. Unnamed profiles receive a
 number for the current desktop session. A profile seen during that session stays
 in the table as disconnected after its browser closes, without stale tab counts.
@@ -103,7 +105,19 @@ windows are restored; maximized windows keep their state. Glint checks the
 resulting focus and reports activation failure if the target cannot be brought
 forward.
 
-Opening search or changing the query selects the first result while keeping the
+Opening Glint clears the query and shows up to six recently visited tabs and
+windows as cards, with the first card selected. Only currently open targets are
+included. Browser access times and desktop foreground changes determine the
+order. Desktop history is kept for the current Glint session; targets with no
+known access time follow the known recent targets in a stable order. Desktop
+discovery samples about once per second, so very brief window switches can be
+missed. Reload the browser extension after upgrading to enable access-time sync.
+
+Tab and Shift+Tab cycle the cards, and Enter switches to the selected target.
+Clicking a card also switches to it. Typing replaces the cards with the usual
+search list; clearing the query restores the cards.
+
+Changing the query selects the first result while keeping the
 caret in the search field. Press Enter to switch immediately. Background
 updates preserve your selected result when it still matches; if it disappears,
 the first remaining result is selected. With no results, Enter does nothing.
@@ -113,11 +127,17 @@ with the search field, so confirming a candidate does not switch tabs.
 | Context | Key | Behavior |
 | --- | --- | --- |
 | Anywhere | `Ctrl+Shift+Space` by default | Open Glint search. |
-| Search field | `↓` | Select and scroll to the first result. An empty list keeps focus in the field. |
-| Search field | `↑` | Keep focus in the field. |
+| Recent cards | `Tab` / `Shift+Tab` | Select the next / previous card, wrapping at either end. |
+| Recent cards | Arrow keys | Move through the card grid; typing stays ready in the search field. |
+| Typed search field | `↓` | Select and scroll to the first result. An empty list keeps focus in the field. |
+| Typed search field | `↑` | Keep focus in the field. |
 | First result | `↑`, `Home` or `PageUp` | Return to the search field, preserving text and caret. |
 | Other results | Arrow keys, `Home` and `PageUp` | Use normal list navigation. |
 | Search field or selected result | `Enter` | Activate the selected browser tab, supported Notepad tab, or desktop window, unless an input method is handling the key. |
+| Selected result | Type text | Return to the search field and continue the query. |
+| Search window | `Ctrl+F` | Focus and select the search query. |
+| Search window | `F2` | Expand or collapse browser connection details. |
+| Search window | `F6` | Move between search and connection controls; use Tab to traverse controls there. |
 | Search window | `Esc` | Hide search. |
 | Search window | `Alt+F4` or close button | Hide search; Glint remains in the tray. |
 | Search window | `Alt+Space` or right-click the title bar | Open the window menu. |

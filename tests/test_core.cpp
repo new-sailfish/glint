@@ -58,5 +58,25 @@ int main() {
         assert(!index.apply(99, Json::Object{{"type", "remove"}, {"version", 1}, {"tabId", 1}}));
         assert(index.disconnect(22) && index.connection_count() == 1 && index.tab_count() == 1);
     }
+    {
+        glint::TabIndex index;
+        assert(index.apply(11, hello("Chrome", "Default")));
+        auto recent = tab(1, "Recent", "https://recent.test");
+        recent["lastAccessed"] = std::int64_t{1730000000123};
+        assert(index.apply(11, Json::Object{{"type", "snapshot"}, {"version", 1},
+            {"tabs", Json::Array{recent, tab(2, "Legacy", "https://legacy.test")}}}));
+        auto rows = index.search(L"");
+        assert(rows[0].last_accessed == 1730000000123);
+        assert(rows[1].last_accessed == 0);
+        for (const auto& invalid : {Json(-1), Json("yesterday"), Json(1.5)}) {
+            auto malformed = recent;
+            malformed["lastAccessed"] = invalid;
+            assert(!index.apply(11, Json::Object{{"type", "upsert"}, {"version", 1}, {"tab", malformed}}));
+            assert(index.search(L"Recent")[0].last_accessed == 1730000000123);
+        }
+        recent["lastAccessed"] = std::int64_t{1730000000999};
+        assert(index.apply(11, Json::Object{{"type", "upsert"}, {"version", 1}, {"tab", recent}}));
+        assert(index.search(L"Recent")[0].last_accessed == 1730000000999);
+    }
     std::cout << "core tests passed\n";
 }

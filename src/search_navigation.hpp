@@ -129,4 +129,65 @@ inline bool navigate_search_results(HWND edit, HWND list, UINT key) {
     return true;
 }
 
+// Recent cards share the result list's selection, but keep the native EDIT
+// ready for typing and IME composition. Call after handle_search_key so an
+// open candidate list retains Tab and arrow keys.
+inline bool navigate_recent_results(HWND edit, HWND list, UINT key, bool reverse = false, int columns = 2) {
+    if (key != VK_TAB && key != VK_LEFT && key != VK_RIGHT && key != VK_UP && key != VK_DOWN) return false;
+    const HWND focused = GetFocus();
+    if (focused != edit && focused != list) return false;
+    if ((GetKeyState(VK_CONTROL) | GetKeyState(VK_MENU) | GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x8000)
+        return false;
+
+    const int count = ListView_GetItemCount(list);
+    if (focused != edit) focus_search_edit(edit);
+    if (count == 0) return true;
+    const int selected = ListView_GetNextItem(list, -1, LVNI_SELECTED);
+    int next = selected;
+    if (selected < 0 || selected >= count) {
+        next = key == VK_TAB && reverse ? count - 1 : 0;
+    } else if (key == VK_TAB) {
+        next = reverse ? (selected == 0 ? count - 1 : selected - 1)
+                       : (selected + 1 == count ? 0 : selected + 1);
+    } else {
+        if (columns < 1) columns = 1;
+        const int column = selected % columns;
+        if (key == VK_LEFT && column > 0) --next;
+        if (key == VK_RIGHT && column + 1 < columns && selected + 1 < count) ++next;
+        if (key == VK_UP && selected >= columns) next -= columns;
+        // A short final row still receives Down from either column above it.
+        if (key == VK_DOWN && columns < count - (selected - column))
+            next = columns < count - selected ? selected + columns : count - 1;
+    }
+    ListView_SetItemState(list, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+    ListView_SetItemState(list, next, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+    ListView_EnsureVisible(list, next, FALSE);
+    return true;
+}
+
+// Transfer text input before TranslateMessage/IsDialogMessage can turn the
+// first keystroke into list type-ahead or start an IME on the wrong control.
+// WM_CHAR also covers already translated Unicode text and surrogate pairs.
+inline bool handle_search_typing(MSG& message, HWND edit, HWND list) {
+    if (message.hwnd != list || GetFocus() != list) return false;
+    if ((GetKeyState(VK_CONTROL) | GetKeyState(VK_MENU) | GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x8000)
+        return false;
+
+    bool text_input = message.message == WM_CHAR && message.wParam >= 0x20 && message.wParam != 0x7f;
+    if (message.message == WM_KEYDOWN) {
+        const UINT key = static_cast<UINT>(message.wParam);
+        const UINT character = MapVirtualKeyW(key, MAPVK_VK_TO_CHAR) & 0x7fffffff;
+        text_input = key == VK_PROCESSKEY || key == VK_PACKET || key == VK_BACK ||
+            (character >= 0x20 && character != 0x7f);
+    }
+    if (!text_input) return false;
+
+    focus_search_edit(edit);
+    MSG input = message;
+    input.hwnd = edit;
+    TranslateMessage(&input);
+    DispatchMessageW(&input);
+    return true;
+}
+
 } // namespace glint

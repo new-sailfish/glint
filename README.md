@@ -30,10 +30,16 @@ or URL, then return to the existing tab or application window.
 
 ## Features and workflow
 
-Press **Ctrl+Shift+Space** and type part of a title or URL. The first result is
+Press **Ctrl+Shift+Space** to see up to six recently visited open tabs or windows.
+Use **Tab / Shift+Tab** to select a card and **Enter** to switch. Start typing
+part of a title or URL to show the search list. The first result is
 selected automatically; press **Enter** to switch, or use the arrow keys to choose
 another result. Glint activates the selected browser tab or desktop window and
 brings it forward, restoring the window if it is minimized.
+
+The bottom status bar keeps browser connections compact. Click it or press
+**F2** for details. **Ctrl+F** returns to search and **F6** moves to connection
+controls; **Connect browser** stays available beside the status.
 
 ![Glint search window with sample tab data from Chrome and Edge profiles](docs/assets/search-en.png)
 

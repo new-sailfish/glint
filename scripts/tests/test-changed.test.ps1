@@ -16,7 +16,7 @@ $passed = 0
 $caseNumber = 0
 $ctestNames = @(
   'glint_core', 'glint_setup_progress', 'glint_desktop_targets', 'glint_connection_overview', 'glint_language',
-  'glint_search_navigation', 'glint_search_caption', 'glint_hotkey', 'glint_hotkey_window',
+  'glint_search_navigation', 'glint_search_caption', 'glint_search_window', 'glint_hotkey', 'glint_hotkey_window',
   'glint_pipe_server', 'glint_foreground_permission', 'glint_native_host',
   'glint_registration', 'glint_bridge_installation', 'glint_extension_identity',
   'glint_extension_bundle', 'glint_browser_launch', 'glint_setup_window',
@@ -198,18 +198,28 @@ try {
     Assert-Contains $a.Output 'maps src/hotkey.cpp'
   }
   Test-Case 'search interaction helpers select their native regression tests' {
-    foreach ($file in @('src/search_results.hpp', 'src/search_navigation.hpp', 'tests/test_search_navigation.cpp')) {
+    foreach ($file in @('src/search_results.hpp', 'src/search_navigation.hpp')) {
       $result = Invoke-Selector @{ List = $true; Files = @($file) }
-      Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_search_navigation')
+      Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_search_navigation', 'glint_search_window')
     }
-    foreach ($file in @('src/search_caption.hpp', 'tests/test_search_caption.cpp')) {
+    foreach ($file in @('tests/test_search_navigation.cpp', 'tests/test_search_caption.cpp')) {
       $result = Invoke-Selector @{ List = $true; Files = @($file) }
-      Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_search_caption')
+      $target = if ($file -like '*navigation*') { 'glint_search_navigation' } else { 'glint_search_caption' }
+      Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', $target)
+    }
+    $result = Invoke-Selector @{ List = $true; Files = @('src/search_caption.hpp') }
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_search_caption', 'glint_search_window')
+  }
+  Test-Case 'search window and recent cards select actual window integration checks' {
+    foreach ($file in @('src/win_app.cpp', 'src/search_cards.hpp', 'src/recent_results.hpp', 'tests/test_search_window.cpp')) {
+      $result = Invoke-Selector @{ List = $true; Files = @($file) }
+      Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_search_window')
+      Assert-Contains $result.Output "maps $file"
     }
   }
   Test-Case 'UI theme and illustration select the setup window tests' {
     $result = Invoke-Selector @{ List = $true; Files = @('src/ui_theme.hpp', 'src/setup_illustration.hpp') }
-    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_hotkey_window', 'glint_setup_window', 'glint_search_caption')
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_hotkey_window', 'glint_setup_window', 'glint_search_caption', 'glint_search_window')
   }
   Test-Case 'setup progress and overview headers select their compiled consumers' {
     $result = Invoke-Selector @{ List = $true; Files = @('src/connection_overview.hpp') }

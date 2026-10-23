@@ -117,6 +117,8 @@ struct Tab {
     std::wstring profile_label;
     bool active = false;
     bool pinned = false;
+    // Unix epoch milliseconds of an observed visit; zero means unknown.
+    std::int64_t last_accessed = 0;
     std::wstring application;
     std::uintptr_t window_handle = 0;
     std::uint32_t process_id = 0;

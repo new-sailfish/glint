@@ -16,6 +16,8 @@
 #include "update_install.hpp"
 #include "search_navigation.hpp"
 #include "search_results.hpp"
+#include "search_cards.hpp"
+#include "recent_results.hpp"
 #include "search_caption.hpp"
 #include "win_common.hpp"
 #include "ui_theme.hpp"
@@ -31,6 +33,7 @@
 #include <filesystem>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -61,6 +64,7 @@ constexpr UINT ID_LANGUAGE = 1005;
 constexpr UINT ID_TRAY_UPDATE = 1006;
 constexpr UINT ID_TRAY_INSTALL = 1007;
 constexpr UINT ID_SEARCH_CLOSE = 1008;
+constexpr UINT ID_CONNECTION_DETAILS = 1009;
 constexpr UINT ID_LANGUAGE_SYSTEM = 1010;
 constexpr UINT ID_LANGUAGE_ENGLISH = 1011;
 constexpr UINT ID_LANGUAGE_CHINESE = 1012;
@@ -97,6 +101,23 @@ public:
             // previously posted messages can still be drained in between.
             if (setup_ && setup_->translate(message)) continue;
             if (handle_search_key(message, edit_, list_, search_input_method_, [this] { activate_selected(); })) continue;
+            if (handle_search_typing(message, edit_, list_)) continue;
+            if (message.message == WM_KEYDOWN &&
+                (message.hwnd == window_ || IsChild(window_, message.hwnd))) {
+                const bool control = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+                const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+                if (control && message.wParam == 'F') {
+                    SetFocus(edit_); SendMessageW(edit_, EM_SETSEL, 0, -1); continue;
+                }
+                if (!control && message.wParam == VK_F2) { toggle_connections(); continue; }
+                if (!control && message.wParam == VK_F6) {
+                    if (GetFocus() == edit_ || GetFocus() == list_) SetFocus(connection_summary_);
+                    else focus_search_edit(edit_);
+                    continue;
+                }
+                if (!control && query_empty_ &&
+                    navigate_recent_results(edit_, list_, static_cast<UINT>(message.wParam), shift, recent_columns_)) continue;
+            }
             if (message.message == WM_SYSKEYDOWN && message.wParam == VK_SPACE &&
                 (message.lParam & (1LL << 29)) &&
                 (message.hwnd == window_ || IsChild(window_, message.hwnd))) {
@@ -122,6 +143,7 @@ public:
     }
 
 private:
+    friend struct SearchWindowTestAccess;
     HWND window_ = nullptr;
     HWND edit_ = nullptr;
     HWND list_ = nullptr;
@@ -143,6 +165,8 @@ private:
     HFONT small_font_ = nullptr;
     HIMAGELIST row_spacing_ = nullptr;
     bool query_empty_ = true;
+    bool connections_expanded_ = false;
+    int recent_columns_ = 2;
     UINT dpi_ = 96;
     std::unique_ptr<SetupWindow> setup_;
     std::unique_ptr<HotkeyWindow> hotkey_window_;
@@ -222,6 +246,7 @@ private:
             if (LOWORD(wparam) == ID_TRAY_SHOW) { self->show_search(); return 0; }
             if (LOWORD(wparam) == ID_TRAY_HOTKEY) { self->configure_hotkey(); return 0; }
             if (LOWORD(wparam) == ID_TRAY_SETUP) { self->show_setup(); return 0; }
+            if (LOWORD(wparam) == ID_CONNECTION_DETAILS) { self->toggle_connections(); return 0; }
             if (LOWORD(wparam) == ID_TRAY_UPDATE) { self->show_updates(true); return 0; }
             if (LOWORD(wparam) == ID_TRAY_INSTALL) { self->show_updates(false); if (self->updater_) self->updater_->install(); return 0; }
             if (LOWORD(wparam) == ID_TRAY_EXIT) { DestroyWindow(hwnd); return 0; }
@@ -235,9 +260,11 @@ private:
             if (wparam == VK_RETURN && GetFocus() == self->list_) { self->activate_selected(); return 0; }
             break;
         case WM_NOTIFY:
-            if (reinterpret_cast<NMHDR*>(lparam)->code == NM_DBLCLK &&
+            if ((reinterpret_cast<NMHDR*>(lparam)->code == NM_DBLCLK ||
+                 (self->query_empty_ && reinterpret_cast<NMHDR*>(lparam)->code == NM_CLICK)) &&
                 reinterpret_cast<NMHDR*>(lparam)->hwndFrom == self->list_) {
-                self->activate_selected(); return 0;
+                if (reinterpret_cast<NMITEMACTIVATE*>(lparam)->iItem >= 0) self->activate_selected();
+                return 0;
             }
             if (reinterpret_cast<NMHDR*>(lparam)->code == NM_CUSTOMDRAW) {
                 const auto* header = reinterpret_cast<NMHDR*>(lparam);
@@ -325,7 +352,7 @@ private:
         return DefWindowProcW(hwnd, message, wparam, lparam);
     }
 
-    bool create_window() {
+    bool create_window(bool register_shell = true) {
         taskbar_created_ = RegisterWindowMessageW(L"TaskbarCreated");
         WNDCLASSEXW klass{sizeof(klass)};
         klass.lpfnWndProc = window_proc;
@@ -381,18 +408,19 @@ private:
                                 12, 52, 860, 420, window_, nullptr, klass.hInstance, nullptr);
         status_ = CreateWindowExW(0, L"STATIC", i18n::text(L"0 results", L"0 个结果"), WS_CHILD | WS_VISIBLE | SS_ENDELLIPSIS,
                                    12, 478, 860, 24, window_, nullptr, klass.hInstance, nullptr);
-        connection_summary_ = CreateWindowExW(0, L"STATIC", i18n::text(L"0 profiles connected", L"已连接 0 个配置文件"), WS_CHILD | WS_VISIBLE | SS_ENDELLIPSIS,
-            12, 478, 680, 24, window_, nullptr, klass.hInstance, nullptr);
+        connection_summary_ = CreateWindowExW(0, L"BUTTON", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_LEFT,
+            12, 478, 680, 24, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_CONNECTION_DETAILS)), klass.hInstance, nullptr);
         setup_button_ = CreateWindowExW(0, L"BUTTON", i18n::text(L"Connect browser", L"连接新的浏览器"), WS_CHILD | WS_VISIBLE | WS_TABSTOP,
             752, 478, 120, 26, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_TRAY_SETUP)), klass.hInstance, nullptr);
         connection_list_ = CreateWindowExW(0, WC_LISTVIEWW, i18n::text(L"Browser connections", L"浏览器连接状态"),
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS,
+            WS_CHILD | WS_TABSTOP | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS,
             12, 478, 860, 100, window_, nullptr, klass.hInstance, nullptr);
         connection_hint_ = CreateWindowExW(0, L"STATIC", i18n::text(L"Click “Connect browser” to add Chrome or Edge.", L"点击“连接新的浏览器”，按引导添加 Chrome 或 Edge。"),
-            WS_CHILD | WS_VISIBLE | SS_CENTER, 24, 510, 830, 24, window_, nullptr, klass.hInstance, nullptr);
+            WS_CHILD | SS_CENTER, 24, 510, 830, 24, window_, nullptr, klass.hInstance, nullptr);
         if (!caption_.create(window_, ID_SEARCH_CLOSE, L"Glint " GLINT_VERSION_WSTRING)) return false;
         update_font();
-        ui::style_button(setup_button_, true);
+        ui::style_button(setup_button_);
+        ui::style_button(connection_summary_);
         ui::style_button(settings_button_);
         ui::style_button(language_button_);
         SendMessageW(edit_, EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(i18n::text(L"Search titles, URLs, or windows", L"搜索标题、网址或窗口")));
@@ -414,12 +442,14 @@ private:
             column.cx = px(i == 0 ? 560 : 140);
             ListView_InsertColumn(connection_list_, i, &column);
         }
-        std::wstring hotkey_error;
-        if (!hotkey_.start(window_, hotkey::load(), hotkey_error)) {
-            startup_warnings_.push_back(hotkey_error + i18n::text(L"\nChoose “Configure shortcut” in the tray menu to change it.", L"\n可从托盘打开“配置全局热键”修改。"));
+        if (register_shell) {
+            std::wstring hotkey_error;
+            if (!hotkey_.start(window_, hotkey::load(), hotkey_error)) {
+                startup_warnings_.push_back(hotkey_error + i18n::text(L"\nChoose “Configure shortcut” in the tray menu to change it.", L"\n可从托盘打开“配置全局热键”修改。"));
+            }
+            tray_.cbSize = sizeof(tray_); tray_.hWnd = window_; tray_.uID = 1; tray_.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP; tray_.uCallbackMessage = WM_TRAY_EVENT;
+            tray_.hIcon = ui::icon(klass.hInstance); wcscpy_s(tray_.szTip, (std::wstring(L"Glint " GLINT_VERSION_WSTRING) + i18n::text(L" · Tab and window search", L" · 标签页与窗口搜索")).c_str()); add_tray();
         }
-        tray_.cbSize = sizeof(tray_); tray_.hWnd = window_; tray_.uID = 1; tray_.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP; tray_.uCallbackMessage = WM_TRAY_EVENT;
-        tray_.hIcon = ui::icon(klass.hInstance); wcscpy_s(tray_.szTip, (std::wstring(L"Glint " GLINT_VERSION_WSTRING) + i18n::text(L" · Tab and window search", L" · 标签页与窗口搜索")).c_str()); add_tray();
         layout();
         return true;
     }
@@ -452,7 +482,7 @@ private:
         description.lfWeight = FW_NORMAL;
         HFONT next_small = CreateFontIndirectW(&description);
         if (next_small) {
-            for (const auto control : {subtitle_, keyboard_hint_, status_, settings_button_, language_button_})
+            for (const auto control : {subtitle_, keyboard_hint_, status_, settings_button_, language_button_, connection_summary_, setup_button_})
                 if (control) SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(next_small), TRUE);
             if (small_font_) DeleteObject(small_font_);
             small_font_ = next_small;
@@ -480,7 +510,8 @@ private:
         const bool compact = height < px(420);
         const bool short_viewport = height < px(350);
         const int results_top = px(compact ? 112 : 132);
-        const int overview_top = height - px(short_viewport ? 114 : 146);
+        const int details_height = connections_expanded_ ? px(short_viewport ? 66 : 100) : 0;
+        const int overview_top = height - px(38) - details_height;
         const int results_height = (std::max)(px(42), overview_top - results_top - px(32));
         move(heading_, px(64), px(14), (std::min)(px(140), width - px(190)), px(29));
         move(subtitle_, px(64), px(44), (std::min)(px(240), width - px(200)), px(20));
@@ -489,13 +520,15 @@ private:
         move(language_button_, width - px(276), px(22), px(140), px(30));
         move(edit_, px(54), px(compact ? 69 : 84), content_width - px(46), px(24));
         move(list_, px(20), results_top, content_width, results_height);
-        move(status_, px(20), results_top + results_height + px(6), px(210), px(22));
-        move(keyboard_hint_, px(230), results_top + results_height + px(6), (std::max)(px(1), content_width - px(210)), px(22));
+        move(status_, px(20), results_top + results_height + px(6), px(120), px(22));
+        move(keyboard_hint_, px(140), results_top + results_height + px(6), (std::max)(px(1), content_width - px(120)), px(22));
         ShowWindow(keyboard_hint_, width >= px(540) ? SW_SHOW : SW_HIDE);
-        move(connection_summary_, px(20), overview_top + px(7), content_width - px(180), px(24));
-        move(setup_button_, width - px(170), overview_top, px(150), px(32));
-        move(connection_list_, px(20), overview_top + px(42), content_width, px(short_viewport ? 60 : 90));
-        move(connection_hint_, px(30), overview_top + px(short_viewport ? 64 : 82), content_width - px(20), px(22));
+        move(connection_summary_, px(20), overview_top, content_width - px(150), px(28));
+        move(setup_button_, width - px(160), overview_top, px(140), px(28));
+        move(connection_list_, px(20), overview_top + px(34), content_width, (std::max)(0, details_height - px(6)));
+        move(connection_hint_, px(30), overview_top + px(short_viewport ? 60 : 76), content_width - px(20), px(22));
+        ShowWindow(connection_list_, connections_expanded_ ? SW_SHOW : SW_HIDE);
+        ShowWindow(connection_hint_, connections_expanded_ && connection_overview_.profiles().empty() ? SW_SHOW : SW_HIDE);
         const int available = (std::max)(px(120), content_width - GetSystemMetricsForDpi(SM_CXVSCROLL, dpi_));
         ListView_SetColumnWidth(list_, 0, available * 44 / 100);
         ListView_SetColumnWidth(list_, 1, available * 34 / 100);
@@ -505,6 +538,7 @@ private:
         ListView_SetColumnWidth(connection_list_, 0, available - state_width - count_width);
         ListView_SetColumnWidth(connection_list_, 1, state_width);
         ListView_SetColumnWidth(connection_list_, 2, count_width);
+        if (query_empty_) recent_columns_ = layout_search_cards(list_, dpi_, content_width, results_height, rows_.size());
         InvalidateRect(window_, nullptr, FALSE);
     }
 
@@ -534,8 +568,12 @@ private:
     }
 
     LRESULT draw_list(NMLVCUSTOMDRAW& draw) const {
-        if (ui::high_contrast()) return CDRF_DODEFAULT;
         const bool results = draw.nmcd.hdr.hwndFrom == list_;
+        if (results && query_empty_ && draw.nmcd.dwDrawStage == CDDS_ITEMPREPAINT) {
+            const auto item = static_cast<std::size_t>(draw.nmcd.dwItemSpec);
+            if (item < rows_.size()) return draw_search_card(draw, rows_[item], source_name(rows_[item]), dpi_, font_, small_font_);
+        }
+        if (ui::high_contrast() && !(results && query_empty_)) return CDRF_DODEFAULT;
         if (draw.nmcd.dwDrawStage == CDDS_PREPAINT)
             return CDRF_NOTIFYITEMDRAW | CDRF_NOTIFYPOSTPAINT;
         if (draw.nmcd.dwDrawStage == CDDS_ITEMPREPAINT) return CDRF_NOTIFYSUBITEMDRAW | CDRF_NOTIFYPOSTPAINT;
@@ -585,10 +623,25 @@ private:
         return CDRF_DODEFAULT;
     }
 
-    void show_search() {
+    void show_search(bool reset_query = true) {
+        desktop_targets_.observe_foreground(GetForegroundWindow());
+        if (reset_query) SetWindowTextW(edit_, L"");
         ShowWindow(window_, SW_SHOW); SetForegroundWindow(window_); SetFocus(edit_); SendMessageW(edit_, EM_SETSEL, 0, -1); refresh_results(true);
     }
     void hide_search() { ShowWindow(window_, SW_HIDE); }
+
+    void toggle_connections() {
+        connections_expanded_ = !connections_expanded_;
+        if (!connections_expanded_ && GetFocus() == connection_list_) SetFocus(connection_summary_);
+        update_connection_summary();
+        layout();
+    }
+
+    std::wstring source_name(const Tab& row) const {
+        if (row.key.source != TabSource::Browser) return row.application;
+        auto source = connection_overview_.name_for(row.key.connection_id);
+        return source.empty() ? row.browser : source;
+    }
 
     void show_system_menu(POINT point = {-1, -1}) {
         if (!window_ || !IsWindowEnabled(window_)) return;
@@ -665,7 +718,7 @@ private:
         bool revealed = false;
         if (!errors.empty()) {
             if (!IsWindowVisible(window_)) {
-                show_search();
+                show_search(false);
                 revealed = true;
             }
             std::wstring details;
@@ -717,7 +770,6 @@ private:
         caption_.refresh_language();
         SetWindowTextW(subtitle_, i18n::text(L"Find open tabs and windows", L"查找打开的标签页和窗口"));
         SetWindowTextW(settings_button_, i18n::text(L"Shortcut", L"快捷键设置"));
-        SetWindowTextW(keyboard_hint_, i18n::text(L"↑ ↓ Select     Enter Switch     Esc Hide", L"↑ ↓ 选择     Enter 切换     Esc 收起"));
         SetWindowTextW(setup_button_, i18n::text(L"Connect browser", L"连接新的浏览器"));
         SetWindowTextW(connection_list_, i18n::text(L"Browser connections", L"浏览器连接状态"));
         SetWindowTextW(connection_hint_, i18n::text(L"Click “Connect browser” to add Chrome or Edge.", L"点击“连接新的浏览器”，按引导添加 Chrome 或 Edge。"));
@@ -782,25 +834,32 @@ private:
         query.resize(static_cast<std::size_t>(length));
         query_empty_ = query.empty();
         result_selection_.prepare(list_, query, rows_, reset_selection);
-        rows_ = index_.search(query);
-        auto native = desktop_targets_.search(query);
+        rows_ = index_.search(query, query_empty_ ? (std::numeric_limits<std::size_t>::max)() : 1000);
+        auto native = desktop_targets_.search(query, query_empty_ ? (std::numeric_limits<std::size_t>::max)() : 1000);
         rows_.insert(rows_.end(), std::make_move_iterator(native.begin()),
             std::make_move_iterator(native.end()));
-        SendMessageW(list_, WM_SETREDRAW, FALSE, 0); ListView_DeleteAllItems(list_);
+        if (query_empty_) rows_ = select_recent_results(std::move(rows_));
+        SendMessageW(list_, WM_SETREDRAW, FALSE, 0);
+        ListView_SetView(list_, query_empty_ ? LV_VIEW_TILE : LV_VIEW_DETAILS);
+        ListView_SetBkColor(list_, query_empty_ ? ui::background() : ui::surface());
+        SetWindowTextW(list_, query_empty_ ? i18n::text(L"Recently used tabs and windows", L"最近访问的标签页和窗口")
+            : i18n::text(L"Search results", L"搜索结果"));
+        ListView_DeleteAllItems(list_);
         for (std::size_t i = 0; i < rows_.size(); ++i) {
             const auto& row = rows_[i];
             LVITEMW item{LVIF_TEXT, static_cast<int>(i), 0, 0, 0, const_cast<LPWSTR>(row.title.c_str()), 0, 0, 0};
             ListView_InsertItem(list_, &item);
             ListView_SetItemText(list_, static_cast<int>(i), 1, const_cast<LPWSTR>(row.url.c_str()));
-            std::wstring source;
-            if (row.key.source == TabSource::Browser) {
-                source = connection_overview_.name_for(row.key.connection_id);
-                if (source.empty()) source = row.browser;
-            } else {
-                source = row.application;
-            }
+            std::wstring source = source_name(row);
             ListView_SetItemText(list_, static_cast<int>(i), 2, const_cast<LPWSTR>(source.c_str()));
+            if (query_empty_) {
+                UINT columns[] = {2, 1};
+                LVTILEINFO tile{sizeof(tile)};
+                tile.iItem = static_cast<int>(i); tile.cColumns = 2; tile.puColumns = columns;
+                ListView_SetTileInfo(list_, &tile);
+            }
         }
+        layout();
         result_selection_.restore(edit_, list_, rows_);
         SendMessageW(list_, WM_SETREDRAW, TRUE, 0); InvalidateRect(list_, nullptr, FALSE);
         update_result_status();
@@ -809,8 +868,12 @@ private:
     void update_result_status() {
         std::wstring text;
         if (rows_.empty() && !query_empty_) text = i18n::text(L"No matching results", L"没有匹配结果");
+        else if (query_empty_) text = i18n::text(L"Recent · ", L"最近访问 · ") + std::to_wstring(rows_.size());
         else text = std::to_wstring(rows_.size()) + i18n::text(L" results", L" 个结果");
         SetWindowTextW(status_, text.c_str());
+        SetWindowTextW(keyboard_hint_, query_empty_
+            ? i18n::text(L"Tab / Shift+Tab Select   Enter Switch   F6 Controls   Esc Hide", L"Tab / Shift+Tab 选择   Enter 切换   F6 操作区   Esc 收起")
+            : i18n::text(L"↑ ↓ Select   Enter Switch   Ctrl+F Search   F6 Controls   Esc Hide", L"↑ ↓ 选择   Enter 切换   Ctrl+F 搜索   F6 操作区   Esc 收起"));
     }
 
     void update_connection_summary() {
@@ -823,6 +886,7 @@ private:
         if (synchronizing) summary += L" · " + std::to_wstring(synchronizing) + i18n::text(L" syncing", L" 个同步中");
         if (profiles.size() > connected + synchronizing)
             summary += L" · " + std::to_wstring(profiles.size() - connected - synchronizing) + i18n::text(L" disconnected", L" 个未连接");
+        summary = (connections_expanded_ ? L"▾ " : L"▸ ") + summary + L"   F2";
         SetWindowTextW(connection_summary_, summary.c_str());
     }
 
@@ -831,7 +895,7 @@ private:
         connection_overview_.update(connections);
         const auto& profiles = connection_overview_.profiles();
         update_connection_summary();
-        ShowWindow(connection_hint_, profiles.empty() ? SW_SHOW : SW_HIDE);
+        ShowWindow(connection_hint_, connections_expanded_ && profiles.empty() ? SW_SHOW : SW_HIDE);
         SendMessageW(connection_list_, WM_SETREDRAW, FALSE, 0);
         ListView_DeleteAllItems(connection_list_);
         for (std::size_t i = 0; i < profiles.size(); ++i) {
@@ -846,6 +910,7 @@ private:
             ListView_SetItemText(connection_list_, static_cast<int>(i), 2, tabs.data());
         }
         SendMessageW(connection_list_, WM_SETREDRAW, TRUE, 0);
+        ShowWindow(connection_list_, connections_expanded_ ? SW_SHOW : SW_HIDE);
         InvalidateRect(connection_list_, nullptr, FALSE);
     }
 
@@ -860,7 +925,7 @@ private:
             AllowSetForegroundWindow(GetCurrentProcessId());
             hide_search();
             if (!desktop_targets_.request_activation(tab)) {
-                show_search();
+                show_search(false);
                 MessageBoxW(window_, i18n::text(
                     L"Could not queue the window switch. Please try again.",
                     L"暂时无法切换窗口，请稍后重试。"), L"Glint", MB_OK | MB_ICONWARNING);
@@ -880,7 +945,7 @@ private:
         // browser to raise the target, or the fallback can cover it again.
         hide_search();
         if (!pipe_.send(tab.key.connection_id, message.dump())) {
-            show_search();
+            show_search(false);
             MessageBoxW(window_, i18n::text(L"Could not send the switch request. Please try again.", L"暂时无法发送切换请求，请稍后重试。"), L"Glint", MB_OK | MB_ICONWARNING);
             drain_events();
             return;

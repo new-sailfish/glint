@@ -184,6 +184,26 @@ if(GLINT_BUILD_TESTS)
     endif()
     add_test(NAME glint_search_caption COMMAND glint_search_caption_tests)
 
+    # The integration test includes win_app.cpp to exercise its real controls.
+    # Reuse the application's other sources and generated version header without
+    # creating a second version allocator or a separate production entry point.
+    get_target_property(GLINT_SEARCH_WINDOW_TEST_SOURCES glint SOURCES)
+    list(REMOVE_ITEM GLINT_SEARCH_WINDOW_TEST_SOURCES src/main.cpp src/win_app.cpp
+      "${CMAKE_CURRENT_BINARY_DIR}/generated/$<CONFIG>/glint_version.rc")
+    add_executable(glint_search_window_tests tests/test_search_window.cpp ${GLINT_SEARCH_WINDOW_TEST_SOURCES})
+    add_dependencies(glint_search_window_tests glint)
+    target_include_directories(glint_search_window_tests PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/src "${CMAKE_CURRENT_BINARY_DIR}/generated/$<CONFIG>")
+    target_link_libraries(glint_search_window_tests PRIVATE glint_core glint_update
+      user32 gdi32 shell32 comctl32 advapi32 ole32 oleaut32 uiautomationcore dwmapi version bcrypt)
+    target_compile_features(glint_search_window_tests PRIVATE cxx_std_20)
+    target_compile_definitions(glint_search_window_tests PRIVATE UNICODE _UNICODE NOMINMAX)
+    if(MSVC)
+      target_compile_options(glint_search_window_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+      set_property(TARGET glint_search_window_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_search_window COMMAND glint_search_window_tests)
+
     add_executable(glint_hotkey_tests tests/test_hotkey.cpp src/hotkey.cpp)
     target_include_directories(glint_hotkey_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(glint_hotkey_tests PRIVATE user32 advapi32)
@@ -325,7 +345,7 @@ if(GLINT_BUILD_TESTS)
       set_tests_properties(glint_update_process PROPERTIES TIMEOUT 180)
       # Desktop geometry, keyboard focus and global hotkeys are validated on
       # the developer desktop; CI excludes this label in its headless checks.
-      set_tests_properties(glint_search_navigation glint_search_caption glint_hotkey glint_hotkey_window
+      set_tests_properties(glint_search_navigation glint_search_caption glint_search_window glint_hotkey glint_hotkey_window
         glint_setup_window PROPERTIES LABELS desktop)
     endif()
   endif()

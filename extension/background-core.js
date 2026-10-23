@@ -128,6 +128,8 @@
       title: typeof tab.title === 'string' ? tab.title : '',
       url: typeof tab.url === 'string' ? tab.url : '',
       active: Boolean(tab.active),
+      lastAccessed: typeof tab.lastAccessed === 'number' && Number.isFinite(tab.lastAccessed) &&
+        tab.lastAccessed > 0 && tab.lastAccessed <= Number.MAX_SAFE_INTEGER ? Math.trunc(tab.lastAccessed) : 0,
     };
   }
 
@@ -160,6 +162,7 @@
       this.schedule = opts.schedule || ((fn, ms) => setTimeout(fn, ms));
       this.clearSchedule = opts.clearSchedule || (id => clearTimeout(id));
       this.wait = opts.wait || (ms => new Promise(resolve => setTimeout(resolve, ms)));
+      this.now = opts.now || (() => Date.now());
       this.logger = opts.logger || (() => {});
       this.port = null;
       this.connected = false;
@@ -173,6 +176,8 @@
       this.eventChain = Promise.resolve();
       this.syncQueue = Promise.resolve();
       this.index = new Map();
+      this.accessTimes = new Map();
+      this.focusedWindowId = null;
       this.reconnectAttempt = 0;
       this.reconnectTimer = null;
       this.lastError = '';
@@ -184,17 +189,61 @@
       const events = this.api.tabs;
       events.onCreated && events.onCreated.addListener(tab => this.queueEvent({kind: 'upsert', tabId: tab.id}));
       events.onUpdated && events.onUpdated.addListener(tabId => this.queueEvent({kind: 'upsert', tabId}));
-      events.onActivated && events.onActivated.addListener(info => this.queueEvent({kind: 'upsert', tabId: info.tabId}));
+      events.onActivated && events.onActivated.addListener(info => {
+        this.rememberAccess(info.tabId, this.now());
+        this.queueEvent({kind: 'upsert', tabId: info.tabId});
+      });
       events.onAttached && events.onAttached.addListener(tabId => this.queueEvent({kind: 'upsert', tabId}));
       // A detached tab can still exist in another window. Reading it avoids a transient false removal.
       events.onDetached && events.onDetached.addListener(tabId => this.queueEvent({kind: 'upsert', tabId}));
-      events.onRemoved && events.onRemoved.addListener(tabId => this.queueEvent({kind: 'remove', tabId}));
+      events.onRemoved && events.onRemoved.addListener(tabId => {
+        this.accessTimes.delete(Number(tabId));
+        this.queueEvent({kind: 'remove', tabId});
+      });
       // Prerendering can replace a tab ID without firing onRemoved for the old ID.
       events.onReplaced && events.onReplaced.addListener((addedTabId, removedTabId) => {
+        this.accessTimes.delete(Number(removedTabId));
         this.queueEvent({kind: 'remove', tabId: removedTabId});
         this.queueEvent({kind: 'upsert', tabId: addedTabId});
       });
+      const windows = this.api.windows;
+      windows && windows.onFocusChanged && windows.onFocusChanged.addListener(
+        windowId => this.observeWindowFocus(windowId));
       this.listenersAttached = true;
+    }
+
+    rememberAccess(tabId, timestamp) {
+      if (!Number.isSafeInteger(Number(tabId)) || Number(tabId) < 0 ||
+          !Number.isSafeInteger(timestamp) || timestamp <= 0) return;
+      const id = Number(tabId);
+      this.accessTimes.set(id, Math.max(timestamp, this.accessTimes.get(id) || 0));
+    }
+
+    normalizeCurrentTab(tab) {
+      const normalized = normalizeTab(tab);
+      this.rememberAccess(normalized.tabId, normalized.lastAccessed);
+      normalized.lastAccessed = Math.max(normalized.lastAccessed, this.accessTimes.get(normalized.tabId) || 0);
+      return normalized;
+    }
+
+    async observeWindowFocus(windowId) {
+      if (!Number.isSafeInteger(windowId) || windowId < 0) {
+        this.focusedWindowId = null;
+        return;
+      }
+      if (this.focusedWindowId === windowId) return;
+      this.focusedWindowId = windowId;
+      const accessedAt = this.now();
+      try {
+        const tabs = await this.api.tabs.query({windowId, active: true});
+        for (const tab of tabs) {
+          if (!tab.active || tab.windowId !== windowId) continue;
+          this.rememberAccess(tab.id, accessedAt);
+          this.queueEvent({kind: 'upsert', tabId: tab.id});
+        }
+      } catch (error) {
+        this.logger('focused tab lookup failed', error);
+      }
     }
 
     queueEvent(event) {
@@ -222,18 +271,20 @@
       if (!event || event.tabId === undefined || event.tabId === null) return;
       if (event.kind === 'remove') {
         this.index.delete(Number(event.tabId));
+        this.accessTimes.delete(Number(event.tabId));
         this.send({type: 'remove', tabId: Number(event.tabId)});
         return;
       }
       try {
         const tab = await this.api.tabs.get(Number(event.tabId));
         if (epoch !== this.connectionEpoch || !this.desktopConnected) return;
-        const normalized = normalizeTab(tab);
+        const normalized = this.normalizeCurrentTab(tab);
         this.index.set(normalized.tabId, normalized);
         this.send({type: 'upsert', tab: normalized});
       } catch (_) {
         if (epoch !== this.connectionEpoch || !this.desktopConnected) return;
         this.index.delete(Number(event.tabId));
+        this.accessTimes.delete(Number(event.tabId));
         this.send({type: 'remove', tabId: Number(event.tabId)});
       }
     }
@@ -253,7 +304,7 @@
       try {
         const tabs = await this.api.tabs.query({});
         if (!this.desktopConnected || epoch !== this.connectionEpoch) return;
-        const normalized = tabs.map(normalizeTab);
+        const normalized = tabs.map(tab => this.normalizeCurrentTab(tab));
         this.index = new Map(normalized.map(tab => [tab.tabId, tab]));
         this.send({type: 'snapshot', tabs: normalized}, epoch);
       } finally {
