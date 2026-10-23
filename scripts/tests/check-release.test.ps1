@@ -27,8 +27,8 @@ function New-Fixture {
   Copy-Item -LiteralPath $gateSource -Destination (Join-Path $scriptDirectory 'check-release.ps1')
   Set-Content -LiteralPath (Join-Path $binaryDirectory 'Glint.exe') -Value 'fixture executable'
 
-  foreach ($tool in @('cmake', 'ctest', 'npm')) {
-    $step = @{ cmake = 'configure'; ctest = 'ctest'; npm = 'extension' }[$tool]
+  foreach ($tool in @('cmake', 'ctest', 'npm', 'node')) {
+    $step = @{ cmake = 'configure'; ctest = 'ctest'; npm = 'extension'; node = 'website' }[$tool]
     $stub = @"
 @echo off
 setlocal
@@ -119,8 +119,8 @@ try {
     $fixture = New-Fixture
     $result = Invoke-Gate $fixture
     Assert-True ($null -eq $result.Failure) "Default gate failed: $($result.Failure)"
-    Assert-True ($result.Steps.Count -eq 7) "Expected seven stages, got $($result.Steps -join ', ')"
-    Assert-True (($result.Steps | ForEach-Object { ($_ -split ' ')[0] }) -join ',' -eq 'configure,build,ctest,extension,lifecycle,imports,package') 'Incorrect validation order.'
+    Assert-True ($result.Steps.Count -eq 8) "Expected eight stages, got $($result.Steps -join ', ')"
+    Assert-True (($result.Steps | ForEach-Object { ($_ -split ' ')[0] }) -join ',' -eq 'configure,build,ctest,extension,website,lifecycle,imports,package') 'Incorrect validation order.'
     Assert-True $result.Published 'Default gate did not publish.'
     Assert-True ($result.Location -eq $temporaryParent.TrimEnd('\', '/')) 'Success changed the caller location.'
   }
@@ -130,7 +130,7 @@ try {
     Assert-True ([bool]($result.Steps | Where-Object { $_ -match '^ctest .*--no-tests=error' })) 'CTest omitted --no-tests=error.'
   }
 
-  foreach ($stage in @('configure', 'build', 'ctest', 'extension')) {
+  foreach ($stage in @('configure', 'build', 'ctest', 'extension', 'website')) {
     Test-Case "native $stage failure stops before publication" {
       $fixture = New-Fixture
       $result = Invoke-Gate $fixture -FailStep $stage
@@ -155,7 +155,7 @@ try {
     }
   }
 
-  foreach ($skip in @('SkipCtest', 'SkipExtensionTests', 'SkipLifecycle', 'SkipImports')) {
+  foreach ($skip in @('SkipCtest', 'SkipExtensionTests', 'SkipWebsiteTests', 'SkipLifecycle', 'SkipImports')) {
     Test-Case "$skip requires SkipPackage before any stage runs" {
       $fixture = New-Fixture
       $result = Invoke-Gate $fixture -Parameters @{ $skip = $true }
@@ -177,7 +177,7 @@ try {
   Test-Case 'configure and build skips still allow complete validation and publication' {
     $result = Invoke-Gate (New-Fixture) -Parameters @{ SkipConfigure = $true; SkipBuild = $true }
     Assert-True ($null -eq $result.Failure) "Existing-build validation failed: $($result.Failure)"
-    Assert-True ($result.Steps.Count -eq 5) 'Existing-build validation omitted a check.'
+    Assert-True ($result.Steps.Count -eq 6) 'Existing-build validation omitted a check.'
     Assert-True $result.Published 'Existing-build validation did not publish.'
   }
 
@@ -191,7 +191,7 @@ try {
   Test-Case 'all stages skipped is rejected' {
     $result = Invoke-Gate (New-Fixture) -Parameters @{
       SkipConfigure = $true; SkipBuild = $true; SkipCtest = $true
-      SkipExtensionTests = $true; SkipLifecycle = $true; SkipImports = $true; SkipPackage = $true
+      SkipExtensionTests = $true; SkipWebsiteTests = $true; SkipLifecycle = $true; SkipImports = $true; SkipPackage = $true
     }
     Assert-True ($null -ne $result.Failure) 'Empty selection succeeded.'
     Assert-True ($result.Failure.ToString() -match 'No Release checks selected') 'Empty selection error was unclear.'
@@ -200,7 +200,7 @@ try {
   Test-Case 'PowerShell-only focused checks ignore a stale native exit code' {
     $result = Invoke-Gate (New-Fixture) -InitialExitCode 41 -Parameters @{
       SkipConfigure = $true; SkipBuild = $true; SkipCtest = $true
-      SkipExtensionTests = $true; SkipPackage = $true
+      SkipExtensionTests = $true; SkipWebsiteTests = $true; SkipPackage = $true
     }
     Assert-True ($null -eq $result.Failure) "Stale native status failed a successful PowerShell step: $($result.Failure)"
     Assert-True (($result.Steps -join ',') -eq 'lifecycle,imports') 'PowerShell-only selection ran the wrong stages.'
@@ -222,7 +222,7 @@ try {
     Set-Content -LiteralPath $customBinary -Value 'focused executable'
     $result = Invoke-Gate $fixture -Parameters @{
       Binary = $customBinary; SkipConfigure = $true; SkipBuild = $true
-      SkipCtest = $true; SkipExtensionTests = $true; SkipPackage = $true
+      SkipCtest = $true; SkipExtensionTests = $true; SkipWebsiteTests = $true; SkipPackage = $true
     }
     Assert-True ($null -eq $result.Failure) "Focused executable check failed: $($result.Failure)"
     Assert-True ($result.Output -match 'Focused Release checks passed') 'Custom executable claimed full validation.'
@@ -234,7 +234,7 @@ try {
     $result = Invoke-Gate $fixture
     Assert-True ($null -ne $result.Failure) 'Missing executable passed validation.'
     Assert-True (-not $result.Published) 'Missing executable was published.'
-    Assert-True ($result.Steps.Count -eq 4) 'Missing executable did not stop at lifecycle validation.'
+    Assert-True ($result.Steps.Count -eq 5) 'Missing executable did not stop at lifecycle validation.'
   }
 } finally {
   Set-Location -LiteralPath $originalLocation

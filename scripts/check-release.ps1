@@ -36,6 +36,9 @@
 .PARAMETER SkipExtensionTests
   Skip `npm --prefix extension test`. Requires -SkipPackage.
 
+.PARAMETER SkipWebsiteTests
+  Skip `node --test site/i18n.test.js site/app.test.js`. Requires -SkipPackage.
+
 .PARAMETER SkipLifecycle
   Skip the desktop/bridge lifecycle smoke test. Requires -SkipPackage.
 
@@ -54,6 +57,7 @@ param(
   [switch]$SkipBuild,
   [switch]$SkipCtest,
   [switch]$SkipExtensionTests,
+  [switch]$SkipWebsiteTests,
   [switch]$SkipLifecycle,
   [switch]$SkipImports,
   [switch]$SkipPackage
@@ -81,6 +85,7 @@ $packageScript = Join-Path $repositoryDirectory 'scripts\package-release.ps1'
 $skippedChecks = @(
   if ($SkipCtest) { 'CTest' }
   if ($SkipExtensionTests) { 'extension tests' }
+  if ($SkipWebsiteTests) { 'website tests' }
   if ($SkipLifecycle) { 'lifecycle smoke' }
   if ($SkipImports) { 'import check' }
 )
@@ -170,10 +175,12 @@ if (-not $SkipExtensionTests) {
       Action = { Invoke-NativeCommand -FilePath 'npm' -Arguments @('--prefix', 'extension', 'test') }
     })
 }
-$steps.Add([pscustomobject]@{
-    Name = 'Run website tests'
-    Action = { Invoke-NativeCommand -FilePath 'node' -Arguments @('--test', 'site/i18n.test.js', 'site/app.test.js') }
-  })
+if (-not $SkipWebsiteTests) {
+  $steps.Add([pscustomobject]@{
+      Name = 'Run website tests'
+      Action = { Invoke-NativeCommand -FilePath 'node' -Arguments @('--test', 'site/i18n.test.js', 'site/app.test.js') }
+    })
+}
 if (-not $SkipLifecycle) {
   $steps.Add([pscustomobject]@{
       Name = 'Verify desktop and bridge lifecycle'
