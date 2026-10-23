@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>连接状态 · Glint</title>
+  <title data-i18n="pageTitle">Connection status · Glint</title>
   <style>
     :root { color-scheme: light dark; font: 13px/1.65 "Segoe UI", "Microsoft YaHei UI", sans-serif;
       --bg: #f5f8fd; --surface: #fff; --ink: #223043; --muted: #53657b; --line: #d7e1ec;
@@ -21,7 +21,7 @@
     .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .brand img { flex: none; display: block; width: 36px; height: 36px; }
     h1 { margin: 0; font-size: 23px; line-height: 1.15; font-weight: 650; letter-spacing: -.5px; }
-    .tagline { margin: 3px 0 0; font-size: 11px; line-height: 1.5; white-space: nowrap; }
+    .tagline { margin: 3px 0 0; font-size: 11px; line-height: 1.5; }
     #browser-name { flex: none; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px;
       color: var(--muted); font-size: 11px; line-height: 1.5; }
     p { margin: 0 0 10px; color: var(--muted); overflow-wrap: anywhere; }
@@ -44,6 +44,7 @@
     .hint { font-size: 12px; }
     .feedback { margin: 7px 0 0; color: var(--accent); }
     .feedback:empty { display: none; }
+    .language-settings { margin-top: 16px; }
     .connection { margin: 22px 0 16px; padding: 16px; border: 1px solid var(--line);
       border-radius: 12px; background: var(--surface); }
     .connection-heading { display: flex; justify-content: space-between; gap: 12px;
@@ -99,42 +100,44 @@
 <body>
   <main>
     <header>
-      <div class="brand"><img src="icon-48.png" width="36" height="36" alt=""><div><h1>Glint</h1><p class="tagline">标签页，随手找到</p></div></div>
-      <span id="browser-name">浏览器</span>
+      <div class="brand"><img src="icon-48.png" width="36" height="36" alt=""><div><h1>Glint</h1><p class="tagline" data-i18n="tagline">Find your open tabs</p></div></div>
+      <span id="browser-name">Browser</span>
     </header>
-    <section class="connection" aria-label="连接状态">
+    <p class="language-settings hint" data-i18n="languageFollowsDesktop">Language follows Glint. Change it in the desktop app’s language menu.</p>
+    <section class="connection" aria-label="Connection status" data-i18n-aria-label="connection">
       <div class="connection-heading">
-        <div class="connection-title"><span id="status-dot" class="status-dot" aria-hidden="true"></span><span id="connection-status" role="status" aria-live="polite">正在检查连接…</span></div>
-        <button id="retry" type="button">重试连接</button>
+        <div class="connection-title"><span id="status-dot" class="status-dot" aria-hidden="true"></span><span id="connection-status" role="status" aria-live="polite">Checking connection…</span></div>
+        <button id="retry" type="button" data-i18n="retry">Retry connection</button>
       </div>
-      <p id="connection-detail" class="hint">正在唤醒扩展后台服务。</p>
-      <label class="hint" for="extension-id">当前扩展 ID</label>
-      <div class="row"><input id="extension-id" readonly spellcheck="false" aria-describedby="copy-status"><button id="copy-id" type="button">复制 ID</button></div>
+      <p id="connection-detail" class="hint">Waking the extension background service.</p>
+      <label class="hint" for="extension-id" data-i18n="extensionId">Current extension ID</label>
+      <div class="row"><input id="extension-id" readonly spellcheck="false" aria-describedby="copy-status"><button id="copy-id" type="button" data-i18n="copyId">Copy ID</button></div>
       <p id="copy-status" class="hint feedback" role="status" aria-live="polite"></p>
     </section>
-    <section class="keyboard-guide" aria-label="搜索快捷键">
-      <p class="shortcut-label">默认快捷键</p>
-      <div class="shortcut"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd><span>呼出搜索</span></div>
-      <p>输入标题或网址，按 <kbd>Enter</kbd> 切换标签页。</p>
-      <p class="hint">已修改快捷键？请使用桌面端设置的组合键。</p>
+    <section class="keyboard-guide" aria-label="Search shortcut" data-i18n-aria-label="shortcutSection">
+      <p class="shortcut-label" data-i18n="shortcutLabel">Default shortcut</p>
+      <div class="shortcut"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd><span data-i18n="showSearch">Open search</span></div>
+      <p data-i18n="searchInstruction">Type a title or URL, then press Enter to switch tabs.</p>
+      <p class="hint" data-i18n="customShortcut">Changed the shortcut? Use the key combination configured in the desktop app.</p>
     </section>
     <details>
-      <summary>配置文件名称</summary>
-      <p class="hint">给当前配置文件设置“工作”“个人”等标签，方便区分搜索结果来源。</p>
+      <summary data-i18n="profileHeading">Profile name</summary>
+      <p class="hint" data-i18n="profileHelp">Label this profile “Work” or “Personal” to identify its search results.</p>
       <form id="profile-form">
-        <label for="profile-label">配置文件标签</label>
-        <input id="profile-label" name="profileLabel" maxlength="80" autocomplete="off" placeholder="例如：工作">
-        <div class="form-actions"><button type="submit">保存标签</button><span id="save-status" class="hint" role="status" aria-live="polite"></span></div>
+        <label for="profile-label" data-i18n="profileLabel">Profile label</label>
+        <input id="profile-label" name="profileLabel" maxlength="80" autocomplete="off" placeholder="For example: Work" data-i18n-placeholder="profilePlaceholder">
+        <div class="form-actions"><button type="submit" data-i18n="saveLabel">Save label</button><span id="save-status" class="hint" role="status" aria-live="polite"></span></div>
       </form>
     </details>
     <details>
-      <summary>连接帮助</summary>
-      <p class="hint">首次使用时，回到 Glint 桌面的“连接浏览器”向导，选择当前浏览器并检查连接。找不到向导时，从 Glint 系统托盘菜单打开“连接浏览器”。</p>
-      <p class="hint">从旧版升级时，请重新运行桌面连接向导，在浏览器中从向导提供的新文件夹加载扩展一次。更换 EXE 位置后，也请重新运行向导以更新连接信息。</p>
-      <p class="hint">关闭这个面板不会断开连接。扩展会在浏览器后台自动连接，状态面板无需一直打开。</p>
+      <summary data-i18n="helpHeading">Connection help</summary>
+      <p class="hint" data-i18n="helpFirst">For your first connection, return to “Connect browser” in the Glint desktop app, select this browser, and check the connection. You can also open “Connect browser” from the Glint system tray menu.</p>
+      <p class="hint" data-i18n="helpUpgrade">When upgrading from an older version, run the desktop connection guide again and load the extension once from the new folder it provides. If you move Glint.exe, run the guide again to update the connection.</p>
+      <p class="hint" data-i18n="helpClose">Closing this panel does not disconnect the extension. It connects automatically in the background; this panel does not need to stay open.</p>
     </details>
-    <footer><p class="hint">每个需要搜索的 Chrome / Edge 配置文件都要安装扩展。仅处理标签页标题和网址，不读取网页正文。</p></footer>
+    <footer><p class="hint" data-i18n="privacy">Install the extension in each Chrome / Edge profile you want to search. It processes tab titles and URLs, without reading page contents.</p></footer>
   </main>
+  <script src="background-core.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

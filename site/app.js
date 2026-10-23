@@ -1,6 +1,14 @@
-/* Progressive enhancement only. No browser data, requests, or storage. */
+/* Progressive enhancement. Stores only the website language preference. */
 (() => {
   'use strict';
+
+  const i18n = window.GlintSiteI18n;
+  const languageControl = document.querySelector('#site-language');
+  let storage;
+  try { storage = window.localStorage; } catch { /* Storage may be disabled. */ }
+  let preference = i18n.readPreference(storage);
+  let language = i18n.resolveLanguage(preference, navigator.language);
+  const t = (key, values) => i18n.message(key, language, values);
 
   const demo = document.querySelector('#search-demo');
   const input = document.querySelector('#demo-query');
@@ -8,26 +16,34 @@
   const status = document.querySelector('#demo-status');
   const empty = document.querySelector('#demo-empty');
   const rows = [...document.querySelectorAll('#demo-results > li')];
+  const searchTitles = new Map(rows.map(row => [row, [row.dataset.title,
+    i18n.translate(row.dataset.title, 'en')].join(' ').toLowerCase()]));
   const visibleRows = () => rows.filter(row => !row.hidden);
   const resultButton = row => row.querySelector('button');
+  let activatedRow = null;
 
   function select(button) {
     rows.forEach(row => resultButton(row).classList.remove('is-selected'));
     if (button) button.classList.add('is-selected');
   }
 
-  function filterResults() {
+  function filterResults(preserveSelection = false) {
     const query = input.value.toLowerCase();
     rows.forEach(row => {
-      const title = row.dataset.title.toLowerCase();
+      const title = searchTitles.get(row);
       const url = row.dataset.url.toLowerCase();
       row.hidden = !title.includes(query) && !url.includes(query);
     });
-    select(null);
+    if (!preserveSelection) {
+      select(null);
+      activatedRow = null;
+    }
     const count = visibleRows().length;
     empty.hidden = count !== 0;
     clear.hidden = input.value.length === 0;
-    status.textContent = query.length ? `${count} 个匹配的示例标签页` : `${count} 个示例标签页`;
+    status.textContent = activatedRow && !activatedRow.hidden
+      ? t('activated', { title: resultButton(activatedRow).querySelector('strong').textContent })
+      : t(query.length ? 'matchCount' : 'sampleCount', { count });
   }
 
   function resetDemo() {
@@ -38,11 +54,12 @@
 
   function activate(button) {
     select(button);
+    activatedRow = rows.find(row => resultButton(row) === button);
     const title = button.querySelector('strong').textContent;
-    status.textContent = `演示：已选择“${title}”。在 Glint 中，这一步会切换到对应标签页。`;
+    status.textContent = t('activated', { title });
   }
 
-  input.addEventListener('input', filterResults);
+  input.addEventListener('input', () => filterResults());
   clear.addEventListener('click', resetDemo);
   rows.forEach(row => {
     const button = resultButton(row);
@@ -92,25 +109,31 @@
     chrome: {
       name: 'Chrome',
       address: 'chrome://extensions/',
-      developer: '在 Chrome 扩展页面右上角，开启“开发者模式”（Developer mode）。',
-      mode: '开发者模式',
-      load: '加载已解压的扩展程序',
     },
     edge: {
       name: 'Edge',
       address: 'edge://extensions/',
-      developer: '在 Edge 扩展页面的左侧栏中，开启“开发人员模式”（Developer mode）。',
-      mode: '开发人员模式',
-      load: '加载解压缩的扩展',
     },
   };
   const browserButtons = [...document.querySelectorAll('[data-browser]')];
-  browserButtons.forEach(button => button.addEventListener('click', () => {
-    const copy = browserCopy[button.dataset.browser];
-    browserButtons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+  let selectedBrowser = 'chrome';
+
+  function updateBrowser() {
+    const copy = {
+      ...browserCopy[selectedBrowser],
+      developer: t(`${selectedBrowser}Developer`),
+      mode: t(`${selectedBrowser}Mode`),
+      load: t(`${selectedBrowser}Load`),
+    };
     document.querySelectorAll('[data-browser-field]').forEach(field => {
       field.textContent = copy[field.dataset.browserField];
     });
+  }
+
+  browserButtons.forEach(button => button.addEventListener('click', () => {
+    selectedBrowser = button.dataset.browser;
+    browserButtons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    updateBrowser();
   }));
 
   const guide = document.querySelector('#setup-guide');
@@ -133,8 +156,14 @@
     });
     back.disabled = step === 0;
     next.disabled = step === panels.length - 1;
-    next.innerHTML = step === panels.length - 1 ? '已到最后一步' : '下一步<span aria-hidden="true">→</span>';
-    progress.textContent = `步骤 ${step + 1} / ${panels.length}`;
+    next.textContent = t(step === panels.length - 1 ? 'lastStep' : 'next');
+    if (step !== panels.length - 1) {
+      const arrow = document.createElement('span');
+      arrow.setAttribute('aria-hidden', 'true');
+      arrow.textContent = '→';
+      next.append(arrow);
+    }
+    progress.textContent = t('progress', { step: step + 1, total: panels.length });
   }
 
   stepLinks.forEach((link, index) => link.addEventListener('click', event => {
@@ -152,7 +181,32 @@
   guide.classList.add('is-enhanced');
   guide.querySelector('.setup-controls').hidden = false;
   const initialStep = panels.findIndex(panel => `#${panel.id}` === window.location.hash);
-  showStep(initialStep >= 0 ? initialStep : 0);
+  step = initialStep >= 0 ? initialStep : 0;
+
+  function applyLanguage() {
+    language = i18n.resolveLanguage(preference, navigator.language);
+    languageControl.value = preference;
+    i18n.translatePage(document, language);
+    updateBrowser();
+    filterResults(true);
+    showStep(step);
+  }
+
+  languageControl.addEventListener('change', () => {
+    preference = i18n.normalizePreference(languageControl.value);
+    i18n.writePreference(storage, preference);
+    applyLanguage();
+  });
+  window.addEventListener('languagechange', () => {
+    if (preference === 'system') applyLanguage();
+  });
+  window.addEventListener('storage', event => {
+    if (event.key === i18n.storageKey || event.key === null) {
+      preference = i18n.readPreference(storage);
+      applyLanguage();
+    }
+  });
+  applyLanguage();
 
   if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const observer = new IntersectionObserver(entries => {

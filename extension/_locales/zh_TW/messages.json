@@ -1,0 +1,5 @@
+{
+  "extensionName": {"message": "Glint 标签页搜索连接器"},
+  "extensionDescription": {"message": "将当前 Chrome 或 Edge 配置文件中已打开的标签页连接到 Glint。"},
+  "toolbarTitle": {"message": "Glint · 连接状态"}
+}

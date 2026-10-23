@@ -8,6 +8,10 @@ foreach(required IN ITEMS GLINT_SOURCE_DIR GLINT_OUTPUT_DIR)
 endforeach()
 glint_read_version("${GLINT_SOURCE_DIR}/VERSION" floor)
 
+if(DEFINED ENV{GLINT_CI_VERSION} AND DEFINED ENV{GLINT_LOCAL_VERSION})
+  message(FATAL_ERROR "GLINT_CI_VERSION and GLINT_LOCAL_VERSION cannot be set together.")
+endif()
+
 if(DEFINED ENV{GLINT_CI_VERSION})
   # Official CI reserves this value before building. Never alter local state.
   glint_parse_version("$ENV{GLINT_CI_VERSION}" version)
@@ -15,17 +19,21 @@ if(DEFINED ENV{GLINT_CI_VERSION})
       version_PATCH LESS floor_PATCH)
     message(FATAL_ERROR "GLINT_CI_VERSION must match VERSION's major.minor and meet its patch floor.")
   endif()
+elseif(DEFINED ENV{GLINT_LOCAL_VERSION})
+  # An explicit local version exercises upgrades without reserving a number or
+  # changing VERSION. It uses the same numeric validation as official builds.
+  glint_parse_version("$ENV{GLINT_LOCAL_VERSION}" version)
 else()
   # Keep state outside build trees so clean/reconfigure and Debug/Release share
-  # the sequence. Separate files preserve earlier major/minor histories.
+  # the high numeric local sequence. Leave earlier major/minor histories intact.
   set(state_dir "${GLINT_SOURCE_DIR}/.local/build-version")
   file(MAKE_DIRECTORY "${state_dir}")
   file(LOCK "${state_dir}/counter.lock" GUARD PROCESS TIMEOUT 30 RESULT_VARIABLE lock_result)
   if(NOT lock_result STREQUAL "0")
     message(FATAL_ERROR "Could not lock the Glint build-version counter: ${lock_result}")
   endif()
-  set(state_file "${state_dir}/${floor_MAJOR}.${floor_MINOR}.txt")
-  set(previous "${floor_PATCH}")
+  set(state_file "${state_dir}/999.0.txt")
+  set(previous "0")
   if(EXISTS "${state_file}")
     file(READ "${state_file}" stored)
     string(STRIP "${stored}" stored)
@@ -38,10 +46,10 @@ else()
     endif()
   endif()
   if(previous GREATER_EQUAL 65535)
-    message(FATAL_ERROR "Glint patch counter exhausted at 65535; advance VERSION's major or minor explicitly.")
+    message(FATAL_ERROR "Glint local 999.0 patch counter exhausted at 65535; use an explicit GLINT_LOCAL_VERSION for this build.")
   endif()
   math(EXPR next "${previous} + 1")
-  glint_parse_version("${floor_MAJOR}.${floor_MINOR}.${next}" version)
+  glint_parse_version("999.0.${next}" version)
   # Reserve before compilation: failed builds consume their number. Replace
   # atomically while holding the lock instead of risking a truncated counter.
   file(WRITE "${state_file}.tmp" "${next}\n")

@@ -6,6 +6,18 @@ const path = require('node:path');
 const extensionDirectory = path.resolve(__dirname, '..');
 const manifest = JSON.parse(fs.readFileSync(path.join(extensionDirectory, 'manifest.json'), 'utf8'));
 
+test('extension-manager metadata has English and both Chinese browser locale catalogs', () => {
+  assert.equal(manifest.default_locale, 'en');
+  for (const locale of ['en', 'zh_CN', 'zh_TW']) {
+    const catalog = JSON.parse(fs.readFileSync(path.join(extensionDirectory, '_locales', locale, 'messages.json'), 'utf8'));
+    for (const value of [manifest.name, manifest.description, manifest.action.default_title]) {
+      const match = /^__MSG_(\w+)__$/.exec(value);
+      assert.ok(match, `${value} must reference a localized message`);
+      assert.ok(catalog[match[1]]?.message, `${locale} must supply ${match[1]}`);
+    }
+  }
+});
+
 test('every manifest runtime path names an existing bundled file', () => {
   const files = new Set([manifest.background.service_worker, manifest.options_page,
     manifest.action.default_popup, ...Object.values(manifest.icons), ...Object.values(manifest.action.default_icon)]);

@@ -1,6 +1,16 @@
 # Glint v0.1 design
 
 Glint is a resident Windows x64 application distributed as one executable.
+Its update controller checks the official GitHub Release feed asynchronously,
+validates version-pinned EXE bytes against the release manifest, and keeps the
+download pending until an explicit restart-and-update action. Feed/transport,
+controller, native update window, and replacement helper are separate modules.
+The helper is a trusted copy of the currently running EXE. It waits on the
+original process handle, replaces the target with a rollback backup, and waits
+for the new desktop's message loop and named pipe to acknowledge startup.
+It never terminates browser processes or browser-owned bridges. Numeric version
+comparison is identical for all builds; local builds normally use `999.0.N`.
+
 Desktop mode owns the in-memory tab index, tray icon, global hotkey and search
 window. Registration installs the same bytes as a per-user `GlintBridge.exe`
 under a SHA-256-versioned directory, avoiding replacement of an in-use image.

@@ -4,7 +4,7 @@ Chrome 和 Edge 共用这个 Manifest V3 扩展。扩展只读取标签页元数
 
 ## 安装和连接
 
-只需下载并运行单个 `Glint.exe`，在主窗口点击**连接新的浏览器**，按五步图示引导操作。主窗口状态表显示各个浏览器配置文件的连接状态和标签页数量。扩展的 5 个运行文件和 4 个图标资源已内嵌在 EXE 中，Glint 自动释放文件并注册内置扩展身份，默认无需复制或填写扩展 ID。无需另外下载扩展文件夹；完整 ZIP 是额外包含文档和扩展源码的可选包。
+只需下载并运行单个 `Glint.exe`，在主窗口点击**连接新的浏览器**，按五步图示引导操作。主窗口状态表显示各个浏览器配置文件的连接状态和标签页数量。扩展的 5 个运行文件、4 个图标资源和 3 个语言资源已内嵌在 EXE 中，Glint 自动释放文件并注册内置扩展身份，默认无需复制或填写扩展 ID。无需另外下载扩展文件夹；完整 ZIP 是额外包含文档和扩展源码的可选包。
 
 1. **选择浏览器。** 选择 Chrome 或 Edge，点击**下一步：打开扩展页**。Glint 会把内置扩展释放到 `%LOCALAPPDATA%\Glint\browser-extension`，并为所选浏览器注册当前用户的连接信息。无需管理员权限。
 2. **打开扩展管理页。** 点击**打开浏览器并复制页面地址**。在浏览器的头像菜单选择要接入的配置文件（例如工作或个人），然后在该配置文件的窗口中按 `Ctrl+L` 选中地址栏，按 `Ctrl+V` 粘贴页面地址，再按 `Enter` 进入扩展管理页：Chrome 为 `chrome://extensions/`，Edge 为 `edge://extensions/`。
@@ -52,7 +52,13 @@ Chrome 加载后正常、重启后消失的现象，强烈支持同一路径的�
 - 只接入了一个配置文件时，Glint 无法看到其他尚未安装扩展的配置文件中的标签页。
 - 注册操作只写当前 Windows 用户的 HKCU 项，无需管理员权限。命令行注册和注销方式见[使用指南](../docs/user-guide.md)。
 
-当前扩展申请 `tabs`、`nativeMessaging`、`storage` 权限；`storage` 只保存配置文件身份和可选标签。页面不加载外部脚本、字体或其他依赖。
+当前扩展申请 `tabs`、`nativeMessaging`、`storage` 权限；`storage` 只保存配置文件身份、可选标签和语言选择。页面不加载外部脚本、字体或其他依赖。
+
+## 界面语言 / Interface language
+
+扩展面板支持 English 和中文，语言统一跟随 Glint 桌面端。在桌面端语言菜单中选择**跟随系统**、**English** 或**中文**后，已连接扩展的面板和工具栏提示立即更新。首次连接桌面端之前，浏览器界面语言为中文时使用中文，其它语言使用英文；连接后会缓存桌面端最后传来的语言，离线或浏览器重启后继续使用。浏览器扩展管理页的扩展名称和说明仍由浏览器按其界面语言选择，浏览器不允许桌面端修改该显示语言。
+
+The panel supports English and Chinese and follows the Glint desktop app. Choose **Follow system**, **English**, or **中文** in the desktop language menu to update connected extension panels and toolbar tooltips immediately. Before the first desktop connection, a Chinese browser UI selects Chinese and other languages select English. After connecting, the extension caches the last desktop language for offline use and browser restarts. The browser still controls the extension name and description on its extensions page; the desktop app cannot change that display language.
 
 ## Native Messaging protocol
 
@@ -62,6 +68,7 @@ Bridge → extension control messages:
 
 - `desktop_status` with `state: "waiting"`: keep the existing native port open, send no tab metadata, and wait for Glint to start. The bridge retries only the local named pipe, with a bounded delay; it does not relaunch the desktop or repeatedly start native processes.
 - `desktop_status` with `state: "connected", generation: N`: a desktop pipe is connected. The extension sends a new `hello` and complete snapshot, including when the same native port reconnects after a desktop restart. Only this acknowledgement resets native-port reconnect backoff.
+- `language_settings` with `version: 1`, `preference: "system"|"en"|"zh-CN"`, and `language: "en"|"zh-CN"`: sent after each `hello` and whenever desktop language settings change. The extension accepts it only while the desktop is connected and only when fields are valid; an explicit preference must match the resolved language. The resolved language updates live panels and the toolbar immediately, then is cached with its preference as `storage.local.desktopLanguage`. Cache writes are serialized, and a failed write never blocks tab synchronization. A new connection refreshes the cached choice.
 
 Every extension → bridge message includes `desktopGeneration: N`, copied from the latest connected status. The bridge drops offline or mismatched messages instead of forwarding buffered metadata to a new desktop session. Asynchronous tab reads, snapshots, queued events and activation requests are also isolated by the extension's connection epoch.
 
@@ -78,7 +85,7 @@ Desktop → browser:
 
 Browser → desktop activation result:
 
-- `activate_result`: `{type, version, requestId, ok, error?}`. Success requires a focused browser window and an active tab in that window. Focus is checked at most 12 times, with 50 ms between checks, and must remain stable for four consecutive samples. Up to two focus retries are allowed; a resolved API promise alone is insufficient. Closed tabs/windows and refused foreground focus are reported as failures.
+- `activate_result`: `{type, version, requestId, ok, error?, errorCode?}`. Success requires a focused browser window and an active tab in that window. Focus is checked at most 12 times, with 50 ms between checks, and must remain stable for four consecutive samples. Up to two focus retries are allowed; a resolved API promise alone is insufficient. Closed tabs/windows and refused foreground focus are reported as failures. Controlled failures carry a stable `errorCode` (`invalid_tab_id`, `activation_failed`, `invalid_window_id`, `window_not_focused`, or `activation_superseded`) so the desktop can show its selected language. Browser-provided errors retain their original diagnostic text without an invented code.
 
 During a snapshot, tab events are queued. Once the snapshot is sent, each queued event re-reads the current tab before replaying it. This prevents a stale `tabs.query` result from overwriting a title, URL, window move or active state that changed during synchronization.
 

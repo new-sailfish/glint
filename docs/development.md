@@ -162,7 +162,7 @@ records are excluded from release packages.
 
 ## Product versions
 
-`VERSION` sets the manually maintained version floor. Each build that includes
+`VERSION` sets the manually maintained official version floor. Each build that includes
 the `glint` target allocates the next patch version, even when the source is
 otherwise up to date. Configure-only runs, test-only targets and repackaging do
 not allocate versions. Failed builds can leave gaps. Never edit generated
@@ -170,15 +170,71 @@ headers or binary metadata to change a version.
 
 | Version stream | Storage and behavior |
 | --- | --- |
-| Local builds | An ignored counter under `.local/build-version/`, shared by Debug and Release and preserved when `build/` is removed. Preserve it to retain local numbering. Invalid or exhausted counters fail explicitly. |
+| Local builds | Default to `999.0.N`, using `.local/build-version/999.0.txt`, shared by Debug and Release and preserved when `build/` is removed. Earlier counters remain untouched. Invalid or exhausted counters fail explicitly. |
 | Official CI builds | An independent allocation recorded atomically in `build-version/0.1.N` tags after script checks pass. Each rerun reserves a new number. These allocation tags are not Releases and should be preserved. |
-| Pull requests | An isolated local preview counter, without permission to write version-allocation tags or publish releases. |
+| Pull requests | The same high local numbering, without permission to write version-allocation tags or publish releases. |
 
 The product version appears in the window title, tray tooltip and EXE
 properties. For a product version such as `0.1.N`, the Windows numeric file
 version is `0.1.N.0`. The release manifest reads both from the packaged EXE.
-Local and official versions can share a number; use the commit and hashes to
-identify a particular build.
+The updater compares the three numeric components only. A normal local
+`999.0.N` build is above the official `0.1.N` sequence, so it will not replace
+development work. There are no separate updater channels or build-origin flags.
+
+### Test automatic updates with a low local version
+
+Use the build-time `GLINT_LOCAL_VERSION` environment variable to generate a
+low version. Do not edit generated headers, EXE resources, `VERSION`, or the
+counter files. The override does not consume a local number and cannot be
+combined with `GLINT_CI_VERSION`.
+
+From a VS 2022 x64 PowerShell 7 developer shell:
+
+```powershell
+if (Test-Path Env:GLINT_CI_VERSION) { throw 'Use a local developer shell.' }
+$previousLocalVersion = $env:GLINT_LOCAL_VERSION
+try {
+    $env:GLINT_LOCAL_VERSION = '0.0.0'
+    cmake --preset release -B .local/update-test/build
+    if ($LASTEXITCODE) { throw 'Configure failed.' }
+    cmake --build .local/update-test/build --config Release --target glint --parallel
+    if ($LASTEXITCODE) { throw 'Build failed.' }
+} finally {
+    $env:GLINT_LOCAL_VERSION = $previousLocalVersion
+}
+```
+
+Use `.local/update-test/build/Release/Glint.exe` as a disposable test copy.
+Exit any existing desktop through its tray menu first; the desktop singleton
+otherwise brings that instance forward. Choose **Software updates** and verify
+the newer version downloads, remains pending during normal use, and installs
+only when **Restart and update** is clicked. Check that language, shortcut and
+browser-profile settings remain intact, the desktop restarts once, and tabs
+resynchronize. Reload browser extensions when the updated-files notice appears.
+
+A full online restart test requires the selected GitHub release to include the
+updater's startup acknowledgment; older pre-updater releases cannot confirm
+completion. Offline process fixtures exercise the helper handoff and replacement
+without relying on GitHub or changing the user's browser registrations.
+
+If the updated process stays alive without confirming startup, the helper leaves
+it running and retains `.glint-update-<nonce>.backup` beside the installed EXE.
+The corresponding diagnostic record is
+`%LOCALAPPDATA%/Glint/updates/<nonce>/transaction.txt`. Close Glint normally
+before restoring that backup or replacing the EXE with a fresh official download;
+check the backup's SHA-256 against the record's previous-file hash first. Do not
+launch `helper.exe` manually or edit the transaction record to force success.
+
+Also check a default `999.0.N` build reports no newer version, automatic checks
+can be disabled, offline failures leave search usable, and corrupted staged
+files cannot install. The focused CTest targets are `glint_update_schedule`,
+`glint_update_feed`, `glint_update_install`, `glint_update_process`, `glint_update_controller` and
+`glint_update_window`; window checks carry the `desktop` label.
+
+Before final delivery, clear `GLINT_LOCAL_VERSION`, return to the normal Release
+preset, and run `scripts/check-release.ps1`. This restores the normal high local
+version and synchronizes the validated `dist/` and ZIP. Preserve all existing
+local counters and official `build-version/*` allocation tags.
 
 Extension versions and the Native Messaging protocol version are separate.
 Generated version files remain under `build/` and do not modify tracked source

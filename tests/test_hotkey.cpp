@@ -1,4 +1,5 @@
 #include "hotkey.hpp"
+#include "language.hpp"
 
 #include <windows.h>
 
@@ -151,6 +152,22 @@ void names_are_readable_and_modifiers_are_ordered() {
     require(name({MOD_CONTROL, VK_OEM_1}).size() > 5, "punctuation keys have localized readable names");
     require(name({0, 0}).empty(), "invalid binding has no misleading display name");
 }
+void validation_uses_selected_language() {
+    std::wstring error;
+    glint::i18n::current_language = glint::i18n::Language::English;
+    require(name({MOD_CONTROL, VK_LEFT}) == L"Ctrl+Left", "English navigation key name ignores OS language");
+    require(name({MOD_CONTROL, VK_BROWSER_FAVORITES}) == L"Ctrl+Browser Favorites", "English media key name ignores OS language");
+    require(!save({0, 'G'}, error) && error.find(L"Ctrl, Alt, or Win") != std::wstring::npos,
+        "English invalid-binding guidance");
+    Registration registration;
+    require(!registration.start(nullptr, kDefault, error) && error.find(L"window") != std::wstring::npos,
+        "English registration failure guidance");
+    glint::i18n::current_language = glint::i18n::Language::Chinese;
+    require(name({MOD_CONTROL, VK_LEFT}) == L"Ctrl+左方向键", "Chinese navigation key name follows preference");
+    require(name({MOD_CONTROL, VK_BROWSER_FAVORITES}) == L"Ctrl+浏览器收藏夹", "Chinese media key name follows preference");
+    require(!save({0, 'G'}, error) && error.find(L"普通键") != std::wstring::npos,
+        "Chinese invalid-binding guidance");
+}
 
 void defaults_and_legacy_values_are_preserved() {
     RegistrySandbox registry;
@@ -302,6 +319,7 @@ int main() {
         {"accepts supported bindings", accepts_supported_bindings},
         {"rejects unsafe bindings", rejects_unsafe_or_unrepresentable_bindings},
         {"readable canonical names", names_are_readable_and_modifiers_are_ordered},
+        {"selected-language validation", validation_uses_selected_language},
         {"default and legacy settings", defaults_and_legacy_values_are_preserved},
         {"custom binding round trip", new_binding_round_trips_without_changing_legacy_setting},
         {"malformed settings fallback", malformed_new_setting_falls_back_to_legacy},

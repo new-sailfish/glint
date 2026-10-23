@@ -1,3 +1,4 @@
+#include "language.hpp"
 #include "bridge_installation.hpp"
 #include "win_common.hpp"
 
@@ -32,7 +33,7 @@ std::filesystem::path module_path(std::wstring& error) {
     std::wstring path(32768, L'\0');
     const DWORD count = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
     if (!count || count >= path.size()) {
-        error = L"无法确定 Glint.exe 的完整路径。";
+        error = i18n::text(L"Could not determine the full path to Glint.exe.", L"无法确定 Glint.exe 的完整路径。");
         return {};
     }
     path.resize(count);
@@ -43,7 +44,7 @@ bool file_digest(const std::filesystem::path& path, Digest& digest, std::wstring
     ReadFileHandle input{CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE,
         nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr)};
     if (input.value == INVALID_HANDLE_VALUE) {
-        error = L"无法读取通信桥文件：" + path.wstring() + L"（" + win::last_error_text() + L"）。";
+        error = i18n::text(L"Could not read the bridge file: ", L"无法读取通信桥文件：") + path.wstring() + i18n::text(L" (", L"（") + win::last_error_text() + i18n::text(L").", L"）。");
         return false;
     }
     HashState state;
@@ -54,7 +55,7 @@ bool file_digest(const std::filesystem::path& path, Digest& digest, std::wstring
     while (status >= 0) {
         DWORD bytes = 0;
         if (!ReadFile(input.value, buffer.data(), static_cast<DWORD>(buffer.size()), &bytes, nullptr)) {
-            error = L"读取通信桥文件失败：" + win::last_error_text();
+            error = i18n::text(L"Could not read the bridge file: ", L"读取通信桥文件失败：") + win::last_error_text();
             return false;
         }
         if (!bytes) break;
@@ -63,7 +64,7 @@ bool file_digest(const std::filesystem::path& path, Digest& digest, std::wstring
     }
     if (status >= 0) status = BCryptFinishHash(state.hash, digest.data(), static_cast<ULONG>(digest.size()), 0);
     if (status < 0 || !nonempty) {
-        error = L"无法验证通信桥文件的 SHA-256 内容。";
+        error = i18n::text(L"Could not verify the SHA-256 hash of the bridge file.", L"无法验证通信桥文件的 SHA-256 内容。");
         return false;
     }
     return true;
@@ -87,7 +88,7 @@ bool current_identity(std::filesystem::path& source, std::filesystem::path& dest
     if (source.empty() || !file_digest(source, digest, error)) return false;
     const std::filesystem::path local_data(win::local_app_data());
     if (!local_data.is_absolute() || local_data.native().find(L'\0') != std::wstring::npos) {
-        error = L"无法确定当前用户的本地应用数据目录，未安装通信桥。";
+        error = i18n::text(L"Could not locate the local app data folder. The bridge was not installed.", L"无法确定当前用户的本地应用数据目录，未安装通信桥。");
         return false;
     }
     destination = local_data / L"Glint" / L"bridge" / digest_text(digest) / L"GlintBridge.exe";
@@ -125,19 +126,19 @@ bool ensure_current(std::filesystem::path& path, std::wstring& error) {
     if (matches_digest(destination, digest)) { path = destination; return true; }
     std::error_code directory_error;
     std::filesystem::create_directories(destination.parent_path(), directory_error);
-    if (directory_error) { error = L"无法创建通信桥安装目录：" + destination.parent_path().wstring(); return false; }
+    if (directory_error) { error = i18n::text(L"Could not create the bridge installation folder: ", L"无法创建通信桥安装目录：") + destination.parent_path().wstring(); return false; }
 
     static std::atomic<unsigned long long> sequence = 0;
     const auto temporary = destination.parent_path() / (L"GlintBridge-" + std::to_wstring(GetCurrentProcessId()) +
         L"-" + std::to_wstring(GetTickCount64()) + L"-" + std::to_wstring(sequence++) + L".tmp");
     if (!CopyFileW(source.c_str(), temporary.c_str(), TRUE)) {
-        error = L"无法安装通信桥：" + win::last_error_text();
+        error = i18n::text(L"Could not install the bridge: ", L"无法安装通信桥：") + win::last_error_text();
         return false;
     }
     const auto remove_temporary = [&] { DeleteFileW(temporary.c_str()); };
     if (!matches_digest(temporary, digest)) {
         remove_temporary();
-        error = L"通信桥副本内容验证失败，未更新安装文件。";
+        error = i18n::text(L"The bridge copy failed verification. Installed files were not changed.", L"通信桥副本内容验证失败，未更新安装文件。");
         return false;
     }
     // Another startup may have installed this identical version concurrently.
@@ -151,11 +152,11 @@ bool ensure_current(std::filesystem::path& path, std::wstring& error) {
         remove_temporary();
         // An identical concurrent installation is usable even if held open.
         if (matches_digest(destination, digest)) { path = destination; return true; }
-        error = L"无法更新通信桥文件：" + win::last_error_text(failure);
+        error = i18n::text(L"Could not update the bridge file: ", L"无法更新通信桥文件：") + win::last_error_text(failure);
         return false;
     }
     if (!matches_digest(destination, digest)) {
-        error = L"已安装的通信桥内容验证失败。";
+        error = i18n::text(L"The installed bridge failed verification.", L"已安装的通信桥内容验证失败。");
         return false;
     }
     path = destination;

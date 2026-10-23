@@ -38,7 +38,7 @@ struct Fixture {
         [this](auto id, auto text) { std::lock_guard lock(events.mutex); events.messages.emplace_back(id, std::move(text)); events.changed.notify_all(); },
         [this](auto id) { std::lock_guard lock(events.mutex); events.disconnected.push_back(id); events.changed.notify_all(); },
         [this](auto id, auto text) { std::lock_guard lock(events.mutex); events.failures.emplace_back(id, std::move(text)); events.changed.notify_all(); }, name};
-    Fixture() { server.start(); }
+    Fixture() { require(!server.ready(), "pipe is not ready before startup"); server.start(); }
     ~Fixture() { server.stop(); }
 };
 
@@ -72,11 +72,34 @@ public:
     }
 };
 
+void readiness_requires_a_working_endpoint() {
+    glint::PipeServer invalid([](auto, auto) {}, [](auto) {}, {}, L"Glint.InvalidPipeName");
+    require(!invalid.ready(), "invalid server is not ready before startup");
+    invalid.start();
+    const auto deadline = std::chrono::steady_clock::now() + 100ms;
+    while (std::chrono::steady_clock::now() < deadline) {
+        require(!invalid.ready(), "failed Windows pipe creation never reports readiness");
+        std::this_thread::sleep_for(5ms);
+    }
+    invalid.stop();
+    require(!invalid.ready(), "failed accept loop remains unready after it exits");
+
+    Fixture fixture;
+    const auto ready_deadline = std::chrono::steady_clock::now() + 2000ms;
+    while (!fixture.server.ready() && std::chrono::steady_clock::now() < ready_deadline)
+        std::this_thread::sleep_for(5ms);
+    require(fixture.server.ready(), "pending accept reports readiness before the first browser connects");
+    require(WaitNamedPipeW(fixture.name.c_str(), 1000) != FALSE, "ready endpoint accepts a real Windows connection");
+    fixture.server.stop();
+    require(!fixture.server.ready(), "accept-loop shutdown clears readiness without a client");
+}
+
 void independent_duplex_clients() {
     Fixture fixture;
     Client first(fixture.name), second(fixture.name);
     first.write("first"); second.write("second");
     require(fixture.events.wait([&] { return fixture.events.messages.size() == 2; }), "receive independent client frames");
+    require(fixture.server.ready(), "pipe readiness confirms an actual listening endpoint");
     glint::ConnectionId first_id = 0, second_id = 0;
     { std::lock_guard lock(fixture.events.mutex); for (const auto& [id, text] : fixture.events.messages) (text == "first" ? first_id : second_id) = id; }
     require(first_id && second_id && first_id != second_id, "connection IDs are isolated");
@@ -158,6 +181,7 @@ void backpressure_is_async_bounded_and_reports_failure() {
     fixture.server.stop();
     require(std::chrono::steady_clock::now() - stopped_at < 1500ms, "stop cancels pending writes, reads and accept promptly");
     require(!fixture.server.send(healthy_id, "after-stop"), "stop rejects new outbound work");
+    require(!fixture.server.ready(), "stopped pipe is no longer ready");
 }
 
 void disconnect_racing_queued_sends_finishes() {
@@ -187,6 +211,7 @@ void disconnect_racing_queued_sends_finishes() {
 
 int main() {
     try {
+        readiness_requires_a_working_endpoint();
         independent_duplex_clients();
         closed_tabs_update_search_without_reconnecting();
         backpressure_is_async_bounded_and_reports_failure();

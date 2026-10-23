@@ -40,6 +40,8 @@ public:
         thread_ = std::thread([this] { accept_loop(); });
     }
 
+    bool ready() const { return accepting_.load() && !stopping_.load(); }
+
     bool send(ConnectionId id, std::string_view message) {
         if (stopping_.load() || message.empty() || message.size() > kMaxMessageBytes || !valid_utf8(message)) return false;
         std::shared_ptr<PipeClient> client;
@@ -161,6 +163,10 @@ private:
     }
 
     void accept_loop() {
+        struct ClearReadiness {
+            std::atomic<bool>& ready;
+            ~ClearReadiness() { ready = false; }
+        } clear_readiness{accepting_};
         if (!stop_event_) return;
         while (!stopping_.load()) {
             HANDLE pipe = make_server_pipe();
@@ -170,6 +176,7 @@ private:
             if (!operation.hEvent) { CloseHandle(pipe); return; }
             BOOL connected = ConnectNamedPipe(pipe, &operation);
             const DWORD error = connected ? ERROR_SUCCESS : GetLastError();
+            accepting_ = connected || error == ERROR_IO_PENDING || error == ERROR_PIPE_CONNECTED;
             if (!connected && error == ERROR_IO_PENDING) {
                 const HANDLE events[] = {operation.hEvent, stop_event_};
                 if (WaitForMultipleObjects(2, events, FALSE, INFINITE) != WAIT_OBJECT_0) CancelIoEx(pipe, &operation);
@@ -235,6 +242,7 @@ private:
         }
         on_disconnect_(client->id);
     }
+    std::atomic<bool> accepting_{false};
 };
 
 PipeServer::PipeServer(MessageCallback message, DisconnectCallback disconnect,
@@ -242,6 +250,7 @@ PipeServer::PipeServer(MessageCallback message, DisconnectCallback disconnect,
     : impl_(std::make_unique<Impl>(std::move(message), std::move(disconnect), std::move(failure), std::move(name))) {}
 PipeServer::~PipeServer() = default;
 void PipeServer::start() { impl_->start(); }
+bool PipeServer::ready() const { return impl_->ready(); }
 bool PipeServer::send(ConnectionId id, std::string_view message) { return impl_->send(id, message); }
 bool PipeServer::allow_foreground(ConnectionId id) { return impl_->allow_foreground(id); }
 void PipeServer::stop() { impl_->stop(); }

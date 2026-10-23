@@ -1,4 +1,5 @@
 #include "win_common.hpp"
+#include "language.hpp"
 
 #include <sddl.h>
 #include <userenv.h>
@@ -119,8 +120,8 @@ bool write_pipe_all(HANDLE handle, const void* data, std::size_t size, HANDLE st
 std::wstring last_error_text(DWORD error) {
     wchar_t* buffer = nullptr;
     const DWORD flags = FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS;
-    const DWORD length = FormatMessageW(flags, nullptr, error, 0, reinterpret_cast<LPWSTR>(&buffer), 0, nullptr);
-    std::wstring text = length ? std::wstring(buffer, length) : L"Windows error " + std::to_wstring(error);
+    const DWORD length = FormatMessageW(flags, nullptr, error, i18n::message_language(), reinterpret_cast<LPWSTR>(&buffer), 0, nullptr);
+    std::wstring text = length ? std::wstring(buffer, length) : i18n::text(L"Windows error ", L"Windows 错误 ") + std::to_wstring(error);
     if (buffer) LocalFree(buffer);
     while (!text.empty() && (text.back() == L'\r' || text.back() == L'\n' || text.back() == L' ')) text.pop_back();
     return text;

@@ -144,15 +144,18 @@ Get-SafeTree (Join-Path $repositoryDirectory 'docs') | Out-Null
 foreach ($name in @('docs/design.md', 'docs/protocol.md', 'docs/branding.md',
     'docs/user-guide.md', 'docs/development.md', 'docs/assets/README.md',
     'docs/assets/glint-banner.svg', 'docs/assets/glint-logo.svg',
-    'docs/assets/tab-overload.svg', 'docs/assets/search.png',
+    'docs/assets/tab-overload.svg', 'docs/assets/tab-overload-en.svg', 'docs/assets/search.png',
     'docs/assets/setup-browser.png', 'docs/assets/setup-load.png',
     'docs/assets/setup-connected.png', 'docs/assets/hotkey.png',
+    'docs/assets/search-en.png', 'docs/assets/setup-browser-en.png',
+    'docs/assets/setup-load-en.png', 'docs/assets/setup-connected-en.png', 'docs/assets/hotkey-en.png',
     'docs/assets/architecture.svg')) {
   $releaseFiles[$name] = Join-Path $repositoryDirectory $name
 }
 # Browser profiles may already load this stable unpacked-extension path.
 foreach ($name in @('manifest.json', 'background.js', 'background-core.js', 'options.html', 'options.js',
-    'icon-16.png', 'icon-32.png', 'icon-48.png', 'icon-128.png')) {
+    'icon-16.png', 'icon-32.png', 'icon-48.png', 'icon-128.png',
+    '_locales/en/messages.json', '_locales/zh_CN/messages.json', '_locales/zh_TW/messages.json')) {
   $releaseFiles["browser-extension/$name"] = Join-Path (Join-Path $repositoryDirectory 'extension') $name
 }
 $expected = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)

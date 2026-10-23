@@ -25,7 +25,7 @@ Glint collects the open tabs from the browser profiles you connect into one
 Windows search window. Search for a title or URL, then return directly to the
 existing tab and its window.
 
-![Illustration of tabs spread across browsers, windows and profiles, brought into one Glint search](docs/assets/tab-overload.svg)
+![Illustration of tabs spread across browsers, windows and profiles, brought into one Glint search](docs/assets/tab-overload-en.svg)
 
 ## Features and workflow
 
@@ -33,7 +33,7 @@ Press **Ctrl+Shift+Space**, type part of a title or URL, select a result and pre
 **Enter**. Glint activates that tab and brings its browser window forward,
 restoring the window if it is minimized.
 
-![Glint search window with sample tab data from Chrome and Edge profiles](docs/assets/search.png)
+![Glint search window with sample tab data from Chrome and Edge profiles](docs/assets/search-en.png)
 
 *Native interface render with sample tab data. [Image provenance](docs/assets/README.md).*
 
@@ -51,6 +51,12 @@ connected profiles; it does not search bookmarks or browsing history.
 
 ## Install, configure and use
 
+### Language
+
+Glint supports English and Chinese. By default, a Chinese Windows display language selects Chinese; every other display language selects English. Choose **English / 中文** in the search window (or **Language / 语言** in the tray menu) to select **Follow system**, **English**, or **中文**. Your selection is saved and applies immediately.
+
+All connected browser extensions follow the desktop language immediately, including when **Follow system** is selected. Reconnecting extensions receive the current language; offline extensions keep the last received language. Before their first connection, extensions follow the browser UI language. The product website keeps its own language selector. Browser-managed extension names and descriptions follow the browser language. Tab titles, URLs, and profile labels remain unchanged.
+
 ### Download
 
 Download [**Glint.exe**](https://github.com/new-sailfish/glint/releases/latest/download/Glint.exe),
@@ -62,28 +68,34 @@ The EXE contains the browser extension and prepares it automatically. The
 optional [full ZIP](https://github.com/new-sailfish/glint/releases/latest/download/Glint-win-x64.zip)
 also includes extension files and documentation.
 
+Glint checks for newer versions and downloads them in the background. Use
+**Software updates** in the tray menu to view progress or disable automatic
+downloads. Choose **Restart and update** when ready; ordinary exit does not
+install an update. Reload the browser extension when prompted after its files
+change. See the [update guide](docs/user-guide.md#updates-and-older-installations).
+
 ### Connect each browser profile
 
-Click **连接新的浏览器** (Connect a new browser) in Glint and follow its five stages:
+Click **Connect browser** in Glint and follow its five stages:
 
-1. **Choose Chrome or Edge.** Click **下一步：打开扩展页**. Glint prepares
+1. **Choose Chrome or Edge.** Click **Next: extensions**. Glint prepares
    `%LOCALAPPDATA%\Glint\browser-extension` and registers the local bridge for
    that browser under your Windows account. The bundled extension needs no ID entry.
-2. **Open the extensions page.** Click **打开浏览器并复制页面地址**. Select the
+2. **Open the extensions page.** Click **Open browser and copy address**. Select the
    intended browser profile, then press **Ctrl+L → Ctrl+V → Enter** to open
    the copied address: `chrome://extensions/` or `edge://extensions/`.
 3. **Enable Developer mode.** In Chrome the switch is at the upper right; in
    Edge it is in the left sidebar. Return to Glint and continue.
-4. **Load the extension.** Click **复制扩展文件夹路径** in Glint, then **Load
+4. **Load the extension.** Click **Copy extension folder path** in Glint, then **Load
    unpacked** in the browser. Paste the copied path into the folder chooser's
    **Folder** field and click **Select Folder**. Select `browser-extension`,
    the folder containing `manifest.json`, rather than its parent directory.
-5. **Confirm synchronization.** Return to Glint and click **已加载，检查连接**.
-   When **已连接** appears with the profile and tab counts, click **开始搜索**.
+5. **Confirm synchronization.** Return to Glint and click **Loaded: check connection**.
+   When the browser is shown as **connected** with the profile and tab counts, click **Start searching**.
 
 | Choose a browser | Load the extension folder | Confirm the connection |
 | --- | --- | --- |
-| ![Glint browser selection](docs/assets/setup-browser.png) | ![Glint instructions for loading the extension folder](docs/assets/setup-load.png) | ![Glint confirms a synchronized browser connection](docs/assets/setup-connected.png) |
+| ![Glint browser selection](docs/assets/setup-browser-en.png) | ![Glint instructions for loading the extension folder](docs/assets/setup-load-en.png) | ![Glint confirms a synchronized browser connection](docs/assets/setup-connected-en.png) |
 
 **Repeat the browser loading step in every profile whose tabs you want to
 search.** Installation currently uses **Load unpacked**; no browser-store
@@ -92,7 +104,7 @@ because the browser loads the extension from it. The page address goes into
 the browser address bar; the folder path goes into the folder chooser.
 
 If the browser does not open, open it yourself and enter its extensions-page
-address. For connection errors, use **连接遇到问题** in the guide or follow the
+address. For connection errors, use **Connection help** in the guide or follow the
 [troubleshooting steps](docs/user-guide.md#connection-troubleshooting).
 
 ### Search and configure the shortcut
@@ -104,13 +116,13 @@ address. For connection errors, use **连接遇到问题** in the guide or follo
 | `↓` in the search field | Select the first result. |
 | `↑` on the first result | Return to the search field, retaining its text and caret. |
 | `Enter` / `Esc` | Activate the selected tab / hide search. |
-| Tray → **配置全局热键** | Record and save a different shortcut. |
+| Tray → **Configure shortcut** | Record and save a different shortcut. |
 
-<img src="docs/assets/hotkey.png" alt="Glint global shortcut settings" width="560">
+<img src="docs/assets/hotkey-en.png" alt="Glint global shortcut settings" width="560">
 
 Click the Glint icon in the browser toolbar to view connection status or set an
 optional profile label. Closing the search window keeps Glint in the tray.
-**退出 Glint** in the tray menu stops the desktop and hotkey; browser-managed
+**Exit Glint** in the tray menu stops the desktop and hotkey; browser-managed
 bridges wait for the next launch. See the [user guide](docs/user-guide.md) for
 shortcut rules, lifecycle details, upgrades, manual registration and uninstalling.
 

@@ -38,6 +38,28 @@ test('normalizeTab keeps metadata and strips unsupported fields', () => {
   assert.deepEqual(normalizeTab({id: 4, windowId: 2, title: '中文', url: 'https://x', active: true, favIconUrl: 'x'}), {tabId:4, windowId:2, title:'中文', url:'https://x', active:true});
 });
 
+test('only validated language settings from a connected desktop can change extension language', async () => {
+  const {api} = fakeApi();
+  const changes = [];
+  const bridge = new TabBridge({api, language: 'en', onLanguageChanged: value => changes.push(value)});
+  const port = portFake(); readyBridge(bridge, port);
+  const valid = {version: 1, type: 'language_settings', preference: 'system', language: 'zh-CN'};
+  for (const invalid of [{...valid, version: undefined}, {...valid, version: 2}, {...valid, language: 'fr'},
+    {...valid, preference: 'fr'}, {...valid, preference: 'en'}, {...valid, language: undefined}]) {
+    await bridge.handleMessage(invalid);
+    assert.equal(bridge.language, 'en');
+  }
+  await bridge.handleMessage(valid);
+  assert.equal(bridge.language, 'zh-CN');
+  assert.deepEqual(changes, [{preference: 'system', language: 'zh-CN'}]);
+  bridge.setDesktopState(false);
+  await bridge.handleMessage({...valid, preference: 'en', language: 'en'});
+  assert.equal(bridge.language, 'zh-CN', 'offline native frames must be ignored');
+  await bridge.handleMessage({version: 1, type: 'desktop_status', state: 'connected', generation: 2});
+  await bridge.handleMessage({...valid, preference: 'en', language: 'en'});
+  assert.equal(bridge.language, 'en', 'reconnected desktop can refresh its choice');
+});
+
 test('snapshot queues events and replays current tab state after snapshot', async () => {
   const {api, tabs} = fakeApi();
   const bridge = new TabBridge({api, profileId: 'p', browser: 'chrome'});
@@ -166,6 +188,27 @@ test('a resolved focus call that leaves the browser behind reports failure', asy
   await bridge.handleMessage({version: 1, type: 'activate', requestId: 'denied', tabId: 2, windowId: 10});
   assert.equal(port.messages.at(-1).ok, false, 'API resolution alone does not prove foreground activation');
   assert.match(port.messages.at(-1).error, /前台|focus/i);
+  assert.equal(port.messages.at(-1).errorCode, 'window_not_focused');
+});
+
+test('activation failures expose stable codes independently of the extension language', async () => {
+  for (const language of ['en', 'zh-CN']) {
+    for (const [scenario, code] of [['invalid-tab', 'invalid_tab_id'], ['inactive', 'activation_failed'],
+      ['invalid-window', 'invalid_window_id'], ['superseded', 'activation_superseded']]) {
+      const {api} = fakeApi();
+      if (scenario === 'inactive') api.tabs.update = async () => ({active: false});
+      if (scenario === 'invalid-window') api.tabs.update = async () => ({active: true, windowId: -1});
+      if (scenario === 'superseded') api.tabs.get = async () => ({active: false, windowId: 10});
+      const bridge = new TabBridge({api, language, wait: async () => {}});
+      const port = portFake(); readyBridge(bridge, port);
+      await bridge.handleMessage({version: 1, type: 'activate', requestId: 'failure',
+        tabId: scenario === 'invalid-tab' ? -1 : 2});
+      const result = port.messages.at(-1);
+      assert.equal(result.ok, false);
+      assert.equal(result.errorCode, code);
+      assert.equal(/[\u3400-\u9fff]/.test(result.error), language === 'zh-CN');
+    }
+  }
 });
 
 test('activation focuses the current window after a tab moved and preserves maximized state', async () => {

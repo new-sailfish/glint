@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 #include "ui_theme.hpp"
+#include "language.hpp"
 
 namespace glint::setup {
 namespace illustration_detail {
@@ -120,62 +121,62 @@ public:
         text(edge ? L"Microsoft Edge" : L"Google Chrome", 40, 86, 230, 22, ink, 2);
         box(40, 118, 189, 29, blue_wash, blue);
         circle(51, 125, 14, RGB(212, 226, 252));
-        text(L"当前配置文件", 75, 125, 140, 19, blue);
-        callout(L"选好浏览器和配置文件", L"在你想连接的配置文件中\n完成后面的操作。");
+        text(i18n::text(L"Current profile", L"当前配置文件"), 75, 125, 140, 19, blue);
+        callout(i18n::text(L"Choose a profile", L"选好浏览器和配置文件"), i18n::text(L"Complete the next steps in the profile you want to connect.", L"在你想连接的配置文件中\n完成后面的操作。"));
     }
     void address(bool edge) const {
         browser(edge, true);
-        text(L"扩展管理", 42, 90, 270, 23, ink, 2);
+        text(i18n::text(L"Extensions", L"扩展管理"), 42, 90, 270, 23, ink, 2);
         stroke(42, 123, 300, 123);
         stroke(42, 138, 240, 138);
-        callout(L"粘贴到浏览器地址栏", L"按 Ctrl+L、Ctrl+V，\n再按回车。");
+        callout(i18n::text(L"Paste the address", L"粘贴到浏览器地址栏"), i18n::text(L"Press Ctrl+L, Ctrl+V,\nthen Enter.", L"按 Ctrl+L、Ctrl+V，\n再按回车。"));
         arrow(429, 53, 366, 53);
     }
     void developer(bool edge) const {
         browser(edge);
         if (edge) {
-            box(29, 81, 132, 73, background, background);
-            text(L"扩展", 40, 88, 100, 18, ink, 2);
-            box(35, 122, 120, 26, blue_wash, blue);
-            text(L"开发人员模式", 42, 128, 83, 17, blue, 1);
-            toggle(121, 128);
-            text(L"已安装的扩展", 182, 92, 208, 24, ink, 2);
+            box(29, 81, 147, 73, background, background);
+            text(i18n::text(L"Extensions", L"扩展"), 40, 88, 100, 18, ink, 2);
+            box(35, 122, 135, 26, blue_wash, blue);
+            text(i18n::text(L"Developer mode", L"开发人员模式"), 42, 128, 92, 17, blue, 1);
+            toggle(136, 128);
+            text(i18n::text(L"Installed extensions", L"已安装的扩展"), 182, 92, 208, 24, ink, 2);
             box(182, 121, 121, 26);
-            text(L"加载解压缩的扩展", 188, 127, 111, 18, muted, 1);
-            callout(L"打开开发人员模式", L"Edge：开关在页面\n左侧边栏。");
+            text(i18n::text(L"Load unpacked", L"加载解压缩的扩展"), 188, 127, 111, 18, muted, 1);
+            callout(i18n::text(L"Enable developer mode", L"打开开发人员模式"), i18n::text(L"Edge: find the switch in the left sidebar.", L"Edge：开关在页面\n左侧边栏。"));
         } else {
-            text(L"扩展程序", 40, 91, 130, 23, ink, 2);
+            text(i18n::text(L"Extensions", L"扩展程序"), 40, 91, 130, 23, ink, 2);
             box(261, 84, 141, 30, blue_wash, blue);
-            text(L"开发者模式", 270, 92, 96, 19, blue, 1);
+            text(i18n::text(L"Developer mode", L"开发者模式"), 270, 92, 96, 19, blue, 1);
             toggle(365, 91);
             box(40, 125, 144, 27);
-            text(L"加载已解压的扩展程序", 47, 132, 132, 17, muted, 1);
-            callout(L"打开开发者模式", L"Chrome：开关在页面\n右上角。");
+            text(i18n::text(L"Load unpacked", L"加载已解压的扩展程序"), 47, 132, 132, 17, muted, 1);
+            callout(i18n::text(L"Enable developer mode", L"打开开发者模式"), i18n::text(L"Chrome: find the switch at the top right.", L"Chrome：开关在页面\n右上角。"));
             arrow(430, 99, 408, 99);
         }
     }
     void load() const {
         box(20, 38, 394, 126);
-        text(L"选择扩展文件夹", 35, 46, 330, 20, ink, 2);
+        text(i18n::text(L"Select the extension folder", L"选择扩展文件夹"), 35, 46, 330, 20, ink, 2);
         stroke(21, 72, 413, 72);
         box(29, 80, 80, 36, background, background);
-        text(L"此电脑", 39, 89, 65, 20, muted, 1);
+        text(i18n::text(L"This PC", L"此电脑"), 39, 89, 65, 20, muted, 1);
         folder(125, 83);
         text(L"browser-extension", 169, 91, 230, 21, ink, 1);
-        text(L"文件夹：", 31, 130, 55, 20, muted, 1);
+        text(i18n::text(L"Folder:", L"文件夹："), 31, 130, 55, 20, muted, 1);
         box(84, 123, 211, 29, blue_wash, blue);
         text(L"…\\Glint\\browser-extension", 91, 131, 198, 18, blue, 1,
             DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
         box(305, 123, 96, 29, blue, blue);
-        text(L"选择文件夹", 310, 130, 86, 18, white, 1, DT_CENTER | DT_TOP | DT_SINGLELINE);
-        callout(L"粘贴路径并确认", L"在底部“文件夹”框粘贴，\n直接点击“选择文件夹”。");
+        text(i18n::text(L"Select Folder", L"选择文件夹"), 310, 130, 86, 18, white, 1, DT_CENTER | DT_TOP | DT_SINGLELINE);
+        callout(i18n::text(L"Paste the folder path", L"粘贴路径并确认"), i18n::text(L"Paste into “Folder” at the bottom, then click “Select Folder”.", L"在底部“文件夹”框粘贴，\n直接点击“选择文件夹”。"));
         arrow(430, 137, 407, 137);
     }
     void connection(bool edge, bool connected) const {
         box(43, 61, 148, 78);
         text(edge ? L"Microsoft Edge" : L"Google Chrome", 50, 78, 134, 22, ink, 2,
             DT_CENTER | DT_TOP | DT_SINGLELINE);
-        text(L"当前配置文件", 51, 107, 132, 18, muted, 1, DT_CENTER | DT_TOP | DT_SINGLELINE);
+        text(i18n::text(L"Current profile", L"当前配置文件"), 51, 107, 132, 18, muted, 1, DT_CENTER | DT_TOP | DT_SINGLELINE);
         const COLORREF state_color = connected ? green : muted;
         arrow(205, 101, 262, 101, state_color);
         box(277, 61, 127, 78, connected ? RGB(235, 247, 240) : background,
@@ -193,16 +194,16 @@ public:
             circle(337, 109, 5, muted);
             circle(349, 109, 5, muted);
         }
-        callout(connected ? L"连接已完成" : L"等待扩展连接",
-            connected ? L"标签页会自动同步。\n现在可以开始搜索。" : L"加载扩展后保持浏览器\n打开，Glint 会自动检测。");
+        callout(connected ? i18n::text(L"Connected", L"连接已完成") : i18n::text(L"Waiting for connection", L"等待扩展连接"),
+            connected ? i18n::text(L"Tabs sync automatically.\nYou can start searching.", L"标签页会自动同步。\n现在可以开始搜索。") : i18n::text(L"Keep your browser open after loading the extension. Glint detects it automatically.", L"加载扩展后保持浏览器\n打开，Glint 会自动检测。"));
     }
     void manual(bool edge) const {
         browser(edge);
-        text(L"Glint · 扩展详情", 41, 86, 300, 23, ink, 2);
-        text(L"扩展 ID", 41, 119, 62, 20, muted, 1);
+        text(i18n::text(L"Glint · Extension details", L"Glint · 扩展详情"), 41, 86, 300, 23, ink, 2);
+        text(i18n::text(L"ID", L"扩展 ID"), 41, 119, 62, 20, muted, 1);
         box(102, 113, 296, 31, blue_wash, blue);
-        text(L"abcdefghijkl…（32 位）", 111, 122, 277, 20, blue, 1);
-        callout(L"复制扩展详情中的 ID", L"仅用于手动连接。\n复制完整的 32 位 ID。");
+        text(i18n::text(L"abcdefghijkl… (32 characters)", L"abcdefghijkl…（32 位）"), 111, 122, 277, 20, blue, 1);
+        callout(i18n::text(L"Copy the extension ID", L"复制扩展详情中的 ID"), i18n::text(L"For manual connection only.\nCopy the full 32-character ID.", L"仅用于手动连接。\n复制完整的 32 位 ID。"));
     }
 private:
     HDC dc_;
@@ -227,7 +228,7 @@ inline void paint_illustration(HDC dc, RECT bounds, int step, bool edge,
     {
         illustration_detail::Painter painter(dc, font);
         painter.box(0, 0, 632, 180, illustration_detail::white, illustration_detail::line, 10);
-        painter.text(L"操作示意", 15, 10, 180, 20, illustration_detail::muted, 1);
+        painter.text(i18n::text(L"How it works", L"操作示意"), 15, 10, 180, 20, illustration_detail::muted, 1);
         switch (step) {
         case 0: painter.choose(edge); break;
         case 1: painter.address(edge); break;

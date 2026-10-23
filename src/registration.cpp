@@ -1,3 +1,4 @@
+#include "language.hpp"
 #include "win_app.hpp"
 #include "registration.hpp"
 #include "extension_identity.hpp"
@@ -201,13 +202,13 @@ int register_origin_sets(const std::vector<std::wstring>& chrome_ids, const std:
     const std::filesystem::path directory = std::filesystem::path(win::local_app_data()) / L"Glint";
     std::error_code create_error;
     std::filesystem::create_directories(directory, create_error);
-    if (create_error) { error = L"无法创建注册目录：" + directory.wstring(); return 1; }
+    if (create_error) { error = i18n::text(L"Could not create the registration folder: ", L"无法创建注册目录：") + directory.wstring(); return 1; }
     const auto chrome_manifest = directory / L"com.glint.host.chrome.json";
     const auto edge_manifest = directory / L"com.glint.host.edge.json";
     bool success = true;
     if (!chrome_ids.empty()) success = write_manifest(chrome_manifest, executable, chrome_ids) && set_registry(kChromeKey, chrome_manifest) && success;
     if (!edge_ids.empty()) success = write_manifest(edge_manifest, executable, edge_ids) && set_registry(kEdgeKey, edge_manifest) && success;
-    if (!success) { error = L"Native Messaging 注册失败，请检查当前用户的注册表和注册目录是否可写。"; return 1; }
+    if (!success) { error = i18n::text(L"Native Messaging registration failed. Check write access to the current user registry and registration folder.", L"Native Messaging 注册失败，请检查当前用户的注册表和注册目录是否可写。"); return 1; }
     return 0;
 }
 
@@ -231,7 +232,7 @@ bool migrate_existing_hosts(std::wstring& error) {
         if (bridge.empty() && !bridge_installation::ensure_current(bridge, error)) return false;
         Json manifest;
         try { manifest = Json::parse(text); }
-        catch (const ProtocolError&) { error = L"现有浏览器通信桥配置已变化，请重新连接浏览器。"; return false; }
+        catch (const ProtocolError&) { error = i18n::text(L"The browser bridge configuration has changed. Please reconnect the browser.", L"现有浏览器通信桥配置已变化，请重新连接浏览器。"); return false; }
         manifest["path"] = wide_to_utf8(bridge.wstring());
         const auto temporary = manifest_path.parent_path() / (manifest_path.filename().wstring() +
             L".migrate-" + std::to_wstring(GetCurrentProcessId()) + L".tmp");
@@ -242,14 +243,14 @@ bool migrate_existing_hosts(std::wstring& error) {
             output.close();
             if (!output) {
                 DeleteFileW(temporary.c_str());
-                error = L"无法保存浏览器通信桥配置：" + manifest_path.wstring();
+                error = i18n::text(L"Could not save the browser bridge configuration: ", L"无法保存浏览器通信桥配置：") + manifest_path.wstring();
                 return false;
             }
         }
         if (!MoveFileExW(temporary.c_str(), manifest_path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
             const DWORD failure = GetLastError();
             DeleteFileW(temporary.c_str());
-            error = L"无法更新浏览器通信桥配置：" + win::last_error_text(failure);
+            error = i18n::text(L"Could not update the browser bridge configuration: ", L"无法更新浏览器通信桥配置：") + win::last_error_text(failure);
             return false;
         }
     }
@@ -278,9 +279,9 @@ int register_hosts(std::wstring_view chrome_id, std::wstring_view edge_id, std::
     const std::wstring normalized_edge = trim_input(edge_id);
     const bool has_chrome = !normalized_chrome.empty();
     const bool has_edge = !normalized_edge.empty();
-    if (!has_chrome && !has_edge) { error = L"请至少填写一个 Chrome 或 Edge 扩展 ID。"; return 2; }
+    if (!has_chrome && !has_edge) { error = i18n::text(L"Enter at least one Chrome or Edge extension ID.", L"请至少填写一个 Chrome 或 Edge 扩展 ID。"); return 2; }
     if ((has_chrome && !valid_extension_id_impl(normalized_chrome)) || (has_edge && !valid_extension_id_impl(normalized_edge))) {
-        error = L"扩展 ID 必须是 32 位小写 a-p 字符。未写入任何注册信息。";
+        error = i18n::text(L"Extension IDs must contain 32 lowercase letters from a to p. No registration was changed.", L"扩展 ID 必须是 32 位小写 a-p 字符。未写入任何注册信息。");
         return 2;
     }
     return register_origin_sets(has_chrome ? std::vector<std::wstring>{normalized_chrome} : std::vector<std::wstring>{},
@@ -321,7 +322,7 @@ int run_register(bool unregister_host, const wchar_t* chrome_id, const wchar_t* 
         const bool chrome_file_ok = remove_manifest(directory / L"com.glint.host.chrome.json");
         const bool edge_file_ok = remove_manifest(directory / L"com.glint.host.edge.json");
         if (!chrome_ok || !edge_ok || !chrome_file_ok || !edge_file_ok) {
-            std::wcerr << L"Native Messaging 注销失败，请检查当前用户的注册表和注册目录是否可写。\n";
+            std::wcerr << i18n::text(L"Native Messaging removal failed. Check write access to the current user registry and registration folder.\n", L"Native Messaging 注销失败，请检查当前用户的注册表和注册目录是否可写。\n");
             return 1;
         }
         return 0;

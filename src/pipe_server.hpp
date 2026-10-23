@@ -22,6 +22,7 @@ public:
     PipeServer& operator=(const PipeServer&) = delete;
 
     void start();
+    [[nodiscard]] bool ready() const;
     // True means queued, not delivered. Does not wait for the peer to read.
     bool send(ConnectionId id, std::string_view message);
     // Call while Glint still owns the foreground, before queuing activation.

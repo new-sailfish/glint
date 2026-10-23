@@ -9,3 +9,6 @@
 107 RCDATA "..\\extension\\icon-32.png"
 108 RCDATA "..\\extension\\icon-48.png"
 109 RCDATA "..\\extension\\icon-128.png"
+110 RCDATA "..\\extension\\_locales\\en\\messages.json"
+111 RCDATA "..\\extension\\_locales\\zh_CN\\messages.json"
+112 RCDATA "..\\extension\\_locales\\zh_TW\\messages.json"

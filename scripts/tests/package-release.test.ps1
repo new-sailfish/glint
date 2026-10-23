@@ -97,11 +97,17 @@ function New-Fixture([switch]$NoGit) {
       'docs/assets/glint-banner.svg' = '<svg>banner</svg>'
       'docs/assets/glint-logo.svg' = '<svg>logo</svg>'
       'docs/assets/tab-overload.svg' = '<svg>browser illustration</svg>'
+      'docs/assets/tab-overload-en.svg' = '<svg>English browser illustration</svg>'
       'docs/assets/search.png' = 'search screenshot'
       'docs/assets/setup-browser.png' = 'browser selection screenshot'
       'docs/assets/setup-load.png' = 'extension loading screenshot'
       'docs/assets/setup-connected.png' = 'connected screenshot'
       'docs/assets/hotkey.png' = 'hotkey screenshot'
+      'docs/assets/search-en.png' = 'English search screenshot'
+      'docs/assets/setup-browser-en.png' = 'English browser selection screenshot'
+      'docs/assets/setup-load-en.png' = 'English extension loading screenshot'
+      'docs/assets/setup-connected-en.png' = 'English connected screenshot'
+      'docs/assets/hotkey-en.png' = 'English hotkey screenshot'
       'docs/assets/architecture.svg' = '<svg>architecture</svg>'
       'assets/logo.svg' = '<svg />'
       'extension/manifest.json' = '{"manifest_version":3}'
@@ -109,6 +115,9 @@ function New-Fixture([switch]$NoGit) {
       'extension/background-core.js' = 'core'
       'extension/options.html' = 'options'
       'extension/options.js' = 'options script'
+      'extension/_locales/en/messages.json' = '{"extensionName":{"message":"Glint"}}'
+      'extension/_locales/zh_CN/messages.json' = '{"extensionName":{"message":"Glint 中文"}}'
+      'extension/_locales/zh_TW/messages.json' = '{"extensionName":{"message":"Glint 中文"}}'
       'extension/icon-16.png' = 'icon16'
       'extension/icon-32.png' = 'icon32'
       'extension/icon-48.png' = 'icon48'
@@ -198,9 +207,11 @@ try {
     $publicDocuments = @('docs/design.md', 'docs/protocol.md', 'docs/branding.md',
       'docs/user-guide.md', 'docs/development.md', 'docs/assets/README.md',
       'docs/assets/glint-banner.svg', 'docs/assets/glint-logo.svg',
-      'docs/assets/tab-overload.svg', 'docs/assets/search.png',
+      'docs/assets/tab-overload.svg', 'docs/assets/tab-overload-en.svg', 'docs/assets/search.png',
       'docs/assets/setup-browser.png', 'docs/assets/setup-load.png',
       'docs/assets/setup-connected.png', 'docs/assets/hotkey.png',
+      'docs/assets/search-en.png', 'docs/assets/setup-browser-en.png',
+      'docs/assets/setup-load-en.png', 'docs/assets/setup-connected-en.png', 'docs/assets/hotkey-en.png',
       'docs/assets/architecture.svg')
     $internalDocuments = @('docs/unknown-draft.md', 'docs/superpowers/plans/private-plan.md',
       'docs/superpowers/specs/private-spec.md', 'docs/validation-2026-10-22.md', 'docs/assets/screenshot.png')

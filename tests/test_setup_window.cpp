@@ -1,4 +1,5 @@
 #include "setup_window.hpp"
+#include "language.hpp"
 #include "extension_identity.hpp"
 #include "registration.hpp"
 
@@ -747,10 +748,60 @@ void confirmation_page_id_repair() {
     click(window, Primary);
     require(searches == 1 && !IsWindowVisible(window), "a synchronized repaired browser must open search normally");
 }
+void language_refresh_preserves_setup_state() {
+    Sandbox sandbox;
+    glint::SetupWindow setup(nullptr, [] {});
+    setup.show();
+    const auto window = test_window();
+    click(window, ChooseChrome);
+    glint::i18n::current_language = glint::i18n::Language::English;
+    setup.refresh_language();
+    require(text(window) == L"Glint — Connect your browser", "setup title follows selected language");
+    require(text(control(window, Primary)) == L"Next: extensions", "setup actions follow selected language");
+    for (int page = 0; page <= 4; ++page) {
+        check_all_dpis(window);
+        if (page < 4) click(window, Primary);
+    }
+    click(window, Troubleshoot);
+    SetWindowTextW(control(window, RepairId), L"draft-id");
+    click(window, RegisterRepair);
+    require(text(control(window, RepairResult)).find(L"32-character") != std::wstring::npos,
+        "repair validation follows selected language");
+    check_all_dpis(window);
+    const auto focused = GetFocus();
+    glint::i18n::current_language = glint::i18n::Language::Chinese;
+    setup.refresh_language();
+    require(IsWindowVisible(control(window, RepairId)) && text(control(window, RepairId)) == L"draft-id",
+        "refresh preserves the repair step and uncommitted ID");
+    require(GetFocus() == focused, "refresh preserves keyboard focus");
+    require(text(control(window, RegisterRepair)) == L"保存 ID 并重试", "refresh translates repair actions");
+    require(text(control(window, RepairResult)).find(L"请输入") != std::wstring::npos,
+        "refresh translates current repair feedback");
+    click(window, BackToStatus);
+    click(window, Back);
+    click(window, Back);
+    click(window, Back);
+    click(window, Back);
+    click(window, Manual);
+    SetWindowTextW(control(window, ManualId), L"unsaved-manual-id");
+    glint::i18n::current_language = glint::i18n::Language::English;
+    setup.refresh_language();
+    require(text(control(window, ManualId)) == L"unsaved-manual-id", "refresh preserves manual ID draft");
+    click(window, RegisterManual);
+    check_all_dpis(window);
+    glint::i18n::current_language = glint::i18n::Language::Chinese;
+    setup.refresh_language();
+    require(visible_text(window).find(L"无法保存扩展 ID") != std::wstring::npos,
+        "a backend validation error becomes localized retry guidance after switching language");
+    require(text(control(window, ManualId)) == L"unsaved-manual-id" &&
+        glint::setup::read_registration().chrome_id == glint::utf8_to_wide(glint::setup::kBundledExtensionId),
+        "translating backend failure preserves the invalid draft and existing registration");
+}
 } // namespace
 
 int main() {
     try {
+        glint::i18n::current_language = glint::i18n::Language::Chinese;
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         INITCOMMONCONTROLSEX controls{sizeof(controls), ICC_LISTVIEW_CLASSES};
         require(InitCommonControlsEx(&controls) != FALSE, "initialize native setup controls");
@@ -760,6 +811,7 @@ int main() {
         manual_validation_and_completion();
         confirmation_page_id_repair();
         short_monitor_focus_and_scrolling();
+        language_refresh_preserves_setup_state();
         std::cout << "setup window tests passed\n";
         return 0;
     } catch (const std::exception& error) {

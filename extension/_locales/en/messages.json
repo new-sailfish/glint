@@ -1,0 +1,5 @@
+{
+  "extensionName": {"message": "Glint Tab Search Connector"},
+  "extensionDescription": {"message": "Connects this Chrome or Edge profile's open tabs to Glint."},
+  "toolbarTitle": {"message": "Glint · Connection status"}
+}

@@ -1,4 +1,6 @@
 #include "win_app.hpp"
+#include "language.hpp"
+#include "update_install.hpp"
 
 #include <windows.h>
 #include <shellapi.h>
@@ -8,6 +10,11 @@
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     int count = 0;
     LPWSTR* arguments = CommandLineToArgvW(GetCommandLineW(), &count);
+    glint::i18n::initialize();
+    if (const auto result = glint::update::dispatch_update_mode(count, arguments)) {
+        if (arguments) LocalFree(arguments);
+        return *result;
+    }
     bool native = false;
     // The installed browser-owned copy has a distinct process name and can
     // never become a second desktop instance when launched without pipes.

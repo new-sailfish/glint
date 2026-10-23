@@ -1,6 +1,7 @@
 #pragma once
 
 #include "glint/core.hpp"
+#include "language.hpp"
 
 #include <algorithm>
 #include <cwctype>
@@ -25,8 +26,8 @@ struct ProfileConnection {
     ConnectionId current_connection_id = 0;
 
     std::wstring name() const {
-        return browser + L"-" + (profile_label.empty()
-            ? L"配置 " + std::to_wstring(unnamed_number) : profile_label);
+        return (browser.empty() ? std::wstring(i18n::text(L"Browser", L"浏览器")) : browser) + L"-" + (profile_label.empty()
+            ? i18n::text(L"Profile ", L"配置 ") + std::to_wstring(unnamed_number) : profile_label);
     }
 };
 
@@ -46,7 +47,6 @@ public:
             std::wstring browser = connection.browser;
             std::transform(browser.begin(), browser.end(), browser.begin(),
                 [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
-            if (browser.empty()) browser = L"浏览器";
             const std::string profile_id = connection.profile_id.empty()
                 ? "connection-" + std::to_string(connection.connection_id) : connection.profile_id;
             auto found = std::find_if(profiles_.begin(), profiles_.end(), [&](const auto& profile) {

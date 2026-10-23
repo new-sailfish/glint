@@ -6,7 +6,8 @@ $ErrorActionPreference = 'Stop'
 $repositoryDirectory = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $testDirectory = Join-Path ([IO.Path]::GetTempPath()) ('Glint-build-version-tests-' + [guid]::NewGuid().ToString('N'))
 $cmake = (Get-Command cmake -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
-$originalOverride = $env:GLINT_CI_VERSION
+$originalCiOverride = $env:GLINT_CI_VERSION
+$originalLocalOverride = $env:GLINT_LOCAL_VERSION
 $failures = [Collections.Generic.List[string]]::new()
 $passed = 0
 
@@ -58,6 +59,7 @@ function Test-Case([string]$Name, [scriptblock]$Body) {
   if ($Name -notlike $Case) { return }
   try {
     $env:GLINT_CI_VERSION = $null
+    $env:GLINT_LOCAL_VERSION = $null
     & $Body
     $script:passed++
     Write-Output "PASS $Name"
@@ -91,8 +93,8 @@ try {
     $sources = @(Get-ChildItem -LiteralPath $fixture -File -Recurse)
     $hashes = @{}
     foreach ($source in $sources) { $hashes[$source.FullName] = (Get-FileHash -LiteralPath $source.FullName).Hash }
-    Assert-True ((Invoke-Generate $fixture) -eq '0.1.1') 'The first build did not increment the VERSION floor.'
-    Assert-True ((Invoke-Generate $fixture) -eq '0.1.2') 'An unchanged build did not increment patch.'
+    Assert-True ((Invoke-Generate $fixture) -eq '999.0.1') 'The first local build did not use the high numeric sequence.'
+    Assert-True ((Invoke-Generate $fixture) -eq '999.0.2') 'An unchanged build did not increment patch.'
     foreach ($source in $sources) {
       Assert-True ((Get-FileHash -LiteralPath $source.FullName).Hash -eq $hashes[$source.FullName]) "Generation modified source $($source.Name)."
     }
@@ -100,25 +102,36 @@ try {
 
   Test-Case 'counter survives build cleanup and is shared across configurations' {
     $fixture = New-Fixture
-    Assert-True ((Invoke-Generate $fixture) -eq '0.1.1') 'Unexpected first version.'
+    Assert-True ((Invoke-Generate $fixture) -eq '999.0.1') 'Unexpected first version.'
     $buildDirectory = [IO.Path]::GetFullPath((Join-Path $fixture 'build'))
     Assert-True ($buildDirectory.StartsWith($testDirectory + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) 'Unsafe fixture build path.'
     Remove-Item -LiteralPath $buildDirectory -Recurse -Force
-    Assert-True ((Invoke-Generate $fixture 'build/debug/generated/Debug') -eq '0.1.2') 'Build cleanup or a different configuration reset the counter.'
-    Assert-True ((Invoke-Generate $fixture) -eq '0.1.3') 'Release did not share the Debug counter.'
+    Assert-True ((Invoke-Generate $fixture 'build/debug/generated/Debug') -eq '999.0.2') 'Build cleanup or a different configuration reset the counter.'
+    Assert-True ((Invoke-Generate $fixture) -eq '999.0.3') 'Release did not share the Debug counter.'
   }
 
-  Test-Case 'manual floors and major minor sequences remain independent' {
+  Test-Case 'local sequence preserves earlier counters and ignores official version floors' {
     $fixture = New-Fixture
-    Invoke-Generate $fixture | Out-Null
-    Write-File (Join-Path $fixture 'VERSION') '0.1.20'
-    Assert-True ((Invoke-Generate $fixture) -eq '0.1.21') 'A higher manual floor was ignored.'
-    Write-File (Join-Path $fixture 'VERSION') '0.2.0'
-    Assert-True ((Invoke-Generate $fixture) -eq '0.2.1') 'A new minor version did not start its own sequence.'
-    Write-File (Join-Path $fixture 'VERSION') '1.0.0'
-    Assert-True ((Invoke-Generate $fixture) -eq '1.0.1') 'A new major version did not start its own sequence.'
-    Write-File (Join-Path $fixture 'VERSION') '0.1.0'
-    Assert-True ((Invoke-Generate $fixture) -eq '0.1.22') 'Returning to an earlier sequence lost its counter.'
+    $legacyCounter = Join-Path $fixture '.local/build-version/0.1.txt'
+    Write-File $legacyCounter "123`n"
+    Write-File (Join-Path $fixture '.local/build-version/999.0.txt') "8`n"
+    $patch = 9
+    foreach ($floor in @('0.1.20', '0.2.0', '1.0.0', '0.1.0')) {
+      Write-File (Join-Path $fixture 'VERSION') $floor
+      Assert-True ((Invoke-Generate $fixture) -eq "999.0.$patch") 'Changing the official VERSION changed the local sequence.'
+      Assert-True ([IO.File]::ReadAllText($legacyCounter) -ceq "123`n") 'A historical local counter was changed.'
+      Assert-True ([IO.File]::ReadAllText((Join-Path $fixture 'VERSION')) -ceq $floor) 'Generation changed the official VERSION.'
+      $patch++
+    }
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $fixture '.local/build-version/0.2.txt'))) 'Local generation allocated an official-version counter.'
+  }
+
+  Test-Case 'high local numeric version sorts above normal official releases' {
+    $fixture = New-Fixture
+    $localVersion = [version](Invoke-Generate $fixture)
+    foreach ($officialVersion in @('0.1.1', '0.1.65535', '1.0.0')) {
+      Assert-True ($localVersion -gt [version]$officialVersion) 'A normal official release would appear newer than the local build.'
+    }
   }
 
   Test-Case 'parallel generators reserve distinct versions' {
@@ -142,13 +155,13 @@ try {
       }
       $versions = @(foreach ($index in 1..6) { Get-GeneratedVersion "$fixture/build/parallel-$index" })
       Assert-True (($versions | Sort-Object -Unique).Count -eq 6) 'Concurrent generators reused a patch.'
-      Assert-True ((Invoke-Generate $fixture) -eq '0.1.7') 'Concurrent increments were lost.'
+      Assert-True ((Invoke-Generate $fixture) -eq '999.0.7') 'Concurrent increments were lost.'
     } finally { foreach ($process in $processes) { $process.Dispose() } }
   }
 
   Test-Case 'corrupt exhausted and malformed versions fail without resetting state' {
     $fixture = New-Fixture
-    $counter = Join-Path $fixture '.local/build-version/0.1.txt'
+    $counter = Join-Path $fixture '.local/build-version/999.0.txt'
     foreach ($value in @('broken', '', '-1', '01', '65536', '999999999999999999999')) {
       Write-File $counter $value
       $errorText = Invoke-Generate $fixture -Failure
@@ -178,7 +191,57 @@ try {
     Invoke-Generate $fixture -Failure | Out-Null
     Write-File (Join-Path $fixture 'VERSION') '0.1.0'
     $env:GLINT_CI_VERSION = $null
-    Assert-True ((Invoke-Generate $fixture) -eq '0.1.1') 'CI changed the local counter.'
+    Assert-True ((Invoke-Generate $fixture) -eq '999.0.1') 'CI changed the local counter.'
+  }
+
+  Test-Case 'explicit local override permits low versions without allocating counters' {
+    $fixture = New-Fixture
+    $versionSource = [IO.File]::ReadAllText((Join-Path $fixture 'VERSION'))
+    foreach ($override in @('0.0.0', '123.456.789', '65535.65535.65535')) {
+      $env:GLINT_LOCAL_VERSION = $override
+      Assert-True ((Invoke-Generate $fixture) -eq $override) 'The exact local version override was not used.'
+      Assert-True (-not (Test-Path -LiteralPath (Join-Path $fixture '.local'))) 'A local override allocated counter state.'
+    }
+    Assert-True ([IO.File]::ReadAllText((Join-Path $fixture 'VERSION')) -ceq $versionSource) 'A local override changed VERSION.'
+    $env:GLINT_LOCAL_VERSION = $null
+    Assert-True ((Invoke-Generate $fixture) -eq '999.0.1') 'A local override consumed a counter.'
+  }
+
+  Test-Case 'explicit local and official overrides preserve existing counters' {
+    $fixture = New-Fixture
+    $legacyCounter = Join-Path $fixture '.local/build-version/0.1.txt'
+    $localCounter = Join-Path $fixture '.local/build-version/999.0.txt'
+    Write-File $legacyCounter "123`n"
+    Write-File $localCounter "42`n"
+    $env:GLINT_LOCAL_VERSION = '0.0.0'
+    Assert-True ((Invoke-Generate $fixture) -eq '0.0.0') 'The low local override was not used.'
+    Assert-True ([IO.File]::ReadAllText($legacyCounter) -ceq "123`n") 'A local override changed the historical counter.'
+    Assert-True ([IO.File]::ReadAllText($localCounter) -ceq "42`n") 'A local override changed the high counter.'
+    $env:GLINT_LOCAL_VERSION = $null
+    $env:GLINT_CI_VERSION = '0.1.456'
+    Assert-True ((Invoke-Generate $fixture) -eq '0.1.456') 'The official override was not used.'
+    Assert-True ([IO.File]::ReadAllText($legacyCounter) -ceq "123`n") 'An official override changed the historical counter.'
+    Assert-True ([IO.File]::ReadAllText($localCounter) -ceq "42`n") 'An official override changed the high counter.'
+    $env:GLINT_CI_VERSION = $null
+    Assert-True ((Invoke-Generate $fixture) -eq '999.0.43') 'Overrides consumed or reset the high counter.'
+  }
+
+  Test-Case 'invalid local overrides fail without allocating counters' {
+    $fixture = New-Fixture
+    foreach ($override in @('0.1', '0.1.1.0', '65536.0.0', '0.65536.0', '0.0.65536', '0.1.-1', '0.1.01', 'v0.0.0', ' 0.0.0 ', "0.0.0`n1.2.3")) {
+      $env:GLINT_LOCAL_VERSION = $override
+      Invoke-Generate $fixture -Failure | Out-Null
+      Assert-True (-not (Test-Path -LiteralPath (Join-Path $fixture '.local'))) 'An invalid override changed counter state.'
+    }
+  }
+
+  Test-Case 'simultaneous official and local overrides are rejected' {
+    $fixture = New-Fixture
+    $env:GLINT_CI_VERSION = '0.1.123'
+    $env:GLINT_LOCAL_VERSION = '0.0.0'
+    $errorText = Invoke-Generate $fixture -Failure
+    Assert-True ($errorText -match 'GLINT_CI_VERSION' -and $errorText -match 'GLINT_LOCAL_VERSION') 'The conflict error did not identify both overrides.'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $fixture '.local'))) 'Conflicting overrides changed counter state.'
   }
 
   Test-Case 'configure and unrelated targets do not bump while native builds do' {
@@ -209,14 +272,15 @@ add_custom_target(unrelated COMMAND "${CMAKE_COMMAND}" -E true)
       Assert-True ($LASTEXITCODE -eq 0) "Native fixture build failed: $($lines -join "`n")"
       $binary = Join-Path $build 'Release/version_fixture.exe'
       $versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($binary)
-      Assert-True ($versionInfo.FileVersion -eq "0.1.$patch.0") 'Native file version is stale or missing.'
-      Assert-True ($versionInfo.ProductVersion -eq "0.1.$patch") 'Native product version is stale or missing.'
-      Assert-True ((& $binary) -eq "0.1.$patch") 'Compiled header and PE resource disagree.'
-      Assert-True ((Get-GeneratedVersion (Join-Path $build 'generated/Release')) -eq "0.1.$patch") 'Generated files and native resource disagree.'
+      Assert-True ($versionInfo.FileVersion -eq "999.0.$patch.0") 'Native file version is stale or missing.'
+      Assert-True ($versionInfo.ProductVersion -eq "999.0.$patch") 'Native product version is stale or missing.'
+      Assert-True ((& $binary) -eq "999.0.$patch") 'Compiled header and PE resource disagree.'
+      Assert-True ((Get-GeneratedVersion (Join-Path $build 'generated/Release')) -eq "999.0.$patch") 'Generated files and native resource disagree.'
     }
   }
 } finally {
-  $env:GLINT_CI_VERSION = $originalOverride
+  $env:GLINT_CI_VERSION = $originalCiOverride
+  $env:GLINT_LOCAL_VERSION = $originalLocalOverride
   $absolute = [IO.Path]::GetFullPath($testDirectory)
   $temporaryPrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
   if (-not $absolute.StartsWith($temporaryPrefix, [StringComparison]::OrdinalIgnoreCase) -or

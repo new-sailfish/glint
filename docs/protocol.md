@@ -34,6 +34,21 @@ The extension UI distinguishes a native port from a connected desktop.
 `profileLabel` is optional because an extension cannot reliably discover the
 browser profile's display name. The bridge may provide a configured label.
 
+The desktop replies to every accepted `hello` with its current language and
+broadcasts changes to every connected profile:
+
+```json
+{"type":"language_settings","version":1,"preference":"system","language":"zh-CN"}
+```
+
+`preference` is `system`, `en`, or `zh-CN`; `language` is the resolved `en` or
+`zh-CN` value. A `system` preference resolves against Windows on the desktop,
+so extensions agree even when the browser UI uses a different language.
+Extensions accept these settings only during an active desktop session, update
+their UI, and cache the latest language for offline use. Explicit preferences
+must match the resolved language. Older extensions ignore this additive v1
+message; reloading the updated extension enables synchronization.
+
 ```json
 {"type":"snapshot","tabs":[
  {"tabId":3,"windowId":1,"index":0,"title":"Docs",
@@ -56,6 +71,14 @@ The desktop requests activation through the bridge (the request may include
 {"type":"activate_result","requestId":"42","ok":false,
  "error":"tab no longer exists"}
 ```
+
+An unsuccessful activation may also include an optional `errorCode` so the
+desktop can display Glint-owned failures in its selected language. Current
+codes are `invalid_tab_id`, `invalid_window_id`, `activation_failed`,
+`window_not_focused`, and `activation_superseded`; the desktop uses
+`send_failed` for its own delivery failures. Unknown codes and browser API
+errors retain the original `error` diagnostic. This optional field is
+backward-compatible with protocol version 1.
 
 `TabIndex` requires `hello` and then `snapshot` before accepting `upsert` or
 `remove`. A malformed message is rejected without changing the existing

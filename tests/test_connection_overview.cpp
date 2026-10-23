@@ -88,7 +88,17 @@ void test_profile_counts_and_reconnects() {
 } // namespace
 
 int main() {
+    glint::i18n::current_language = glint::i18n::Language::Chinese;
     test_connection_lifecycle();
     test_profile_counts_and_reconnects();
+    glint::ConnectionOverview overview;
+    std::vector live{profile(1, "unnamed", L"", true), profile(2, "named", L"chrome", true, 0, L"工作")};
+    overview.update(live);
+    require(overview.name_for(1) == L"浏览器-配置 1", "Chinese fallback profile name");
+    glint::i18n::current_language = glint::i18n::Language::English;
+    require(overview.name_for(1) == L"Browser-Profile 1", "Language switch must translate existing fallback names");
+    require(overview.name_for(2) == L"chrome-工作", "Language switch must preserve user labels");
+    overview.update(live);
+    require(overview.profiles().size() == 2, "Language switch must not change browser identity");
     std::cout << "Connection overview tests passed\n";
 }

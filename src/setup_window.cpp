@@ -1,4 +1,5 @@
 #include "setup_window.hpp"
+#include "language.hpp"
 #include "extension_bundle.hpp"
 #include "registration.hpp"
 #include "setup_progress.hpp"
@@ -69,7 +70,7 @@ void SetupWindow::paint(HDC dc) const {
 void SetupWindow::show() {
     const bool reopening = window_ && !IsWindowVisible(window_);
     if (!window_ && !create()) {
-        MessageBoxW(owner_, L"无法打开连接向导。请参照 README.md 安装扩展。", L"Glint", MB_OK | MB_ICONERROR);
+        MessageBoxW(owner_, i18n::text(L"Could not open the connection guide. See README.md to install the extension.", L"无法打开连接向导。请参照 README.md 安装扩展。"), L"Glint", MB_OK | MB_ICONERROR);
         return;
     }
     if (reopening) set_page(Choose);
@@ -104,6 +105,41 @@ HWND SetupWindow::add(const wchar_t* type, const wchar_t* text, DWORD style, int
     } else if (wcscmp(type, L"EDIT") == 0) ui::style_edit(child);
     return child;
 }
+HWND SetupWindow::add(const wchar_t* type, Caption caption, DWORD style, int id,
+    int x, int y, int width, int height, int page, int font, bool stretch) {
+    const auto child = add(type, i18n::text(caption.english, caption.chinese), style, id, x, y, width, height, page, font, stretch);
+    controls_.back().english = caption.english;
+    controls_.back().chinese = caption.chinese;
+    return child;
+}
+void SetupWindow::set_feedback(HWND target, std::wstring english, std::wstring chinese) {
+    auto& feedback = target == repair_result_ ? repair_feedback_ : notice_feedback_;
+    feedback = {std::move(english), std::move(chinese)};
+    SetWindowTextW(target, i18n::text(feedback.english.c_str(), feedback.chinese.c_str()));
+}
+void SetupWindow::set_failure(HWND target, const std::wstring& detail, Caption retry) {
+    // Backend diagnostics have already been localized. Preserve that diagnostic
+    // in its original language and a useful retry message in the other one.
+    set_feedback(target, i18n::current_language == i18n::Language::English ? detail : retry.english,
+        i18n::current_language == i18n::Language::Chinese ? detail : retry.chinese);
+}
+void SetupWindow::refresh_language() {
+    if (!window_) return;
+    SetWindowTextW(window_, i18n::text(L"Glint — Connect your browser", L"Glint — 连接浏览器"));
+    for (const auto& control : controls_) {
+        if (control.english) SetWindowTextW(control.window, i18n::text(control.english, control.chinese));
+    }
+    SendMessageW(repair_id_, EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(i18n::text(
+        L"Paste a 32-character ID or chrome-extension:// address", L"粘贴 32 位 ID 或 chrome-extension:// 页面地址")));
+    SendMessageW(manual_id_, EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(i18n::text(
+        L"Copy the 32-character ID from extension details", L"从扩展详情页复制 32 位 ID")));
+    SetWindowTextW(notice_, i18n::text(notice_feedback_.english.c_str(), notice_feedback_.chinese.c_str()));
+    SetWindowTextW(repair_result_, i18n::text(repair_feedback_.english.c_str(), repair_feedback_.chinese.c_str()));
+    update_page_text();
+    update_browser_status();
+    update_status();
+    layout();
+}
 bool SetupWindow::create() {
     WNDCLASSEXW klass{sizeof(klass)};
     klass.lpfnWndProc = window_proc;
@@ -124,7 +160,7 @@ bool SetupWindow::create() {
     const auto& work = monitor.rcWork;
     const int width = (std::min)(frame.right - frame.left, work.right - work.left);
     const int height = (std::min)(frame.bottom - frame.top, work.bottom - work.top);
-    window_ = CreateWindowExW(WS_EX_CONTROLPARENT, kSetupClass, L"Glint — 连接浏览器", style,
+    window_ = CreateWindowExW(WS_EX_CONTROLPARENT, kSetupClass, i18n::text(L"Glint — Connect your browser", L"Glint — 连接浏览器"), style,
         work.left + (work.right - work.left - width) / 2, work.top + (work.bottom - work.top - height) / 2,
         width, height, nullptr, nullptr, klass.hInstance, this);
     if (!window_) return false;
@@ -141,46 +177,46 @@ bool SetupWindow::create() {
         work.top + (work.bottom - work.top - actual_height) / 2,
         actual_width, actual_height, SWP_NOZORDER | SWP_NOACTIVATE);
     heading_ = add(L"STATIC", L"", 0, 0, 76, 22, 580, 36, -1, 2, true);
-    add(L"STATIC", L"让打开的标签页出现在 Glint 搜索中。", 0, 0, 76, 66, 580, 24, -1, 0, true);
+    add(L"STATIC", {L"Find your open browser tabs in Glint search.", L"让打开的标签页出现在 Glint 搜索中。"}, 0, 0, 76, 66, 580, 24, -1, 0, true);
     progress_ = add(L"STATIC", L"", 0, StepProgress, 24, 102, 632, 24, -1, 1, true);
     add(L"STATIC", L"", SS_OWNERDRAW, 0, 24, 136, 632, 1, -1, 0, true);
     illustration_ = add(L"STATIC", L"", SS_OWNERDRAW, Illustration, 24, 154, 632, 170, -1, 0, true);
     add(L"BUTTON", L"Google Chrome", WS_TABSTOP | WS_GROUP | BS_AUTORADIOBUTTON, ChooseChrome, 36, 340, 286, 38, Choose, 1);
     add(L"BUTTON", L"Microsoft Edge", WS_TABSTOP | BS_AUTORADIOBUTTON, ChooseEdge, 358, 340, 286, 38, Choose, 1);
     browser_status_ = add(L"STATIC", L"", 0, 0, 24, 390, 632, 42, Choose, 0, true);
-    add(L"BUTTON", L"其他版本：手动填写扩展 ID", WS_TABSTOP, Manual, 24, 438, 270, 28, Choose);
-    add(L"STATIC", L"先在浏览器中选好要连接的配置文件。\r\n再按 Ctrl+L → Ctrl+V → 回车，打开扩展管理页。", 0, 0, 24, 338, 632, 44, Extensions, 0, true);
-    add(L"BUTTON", L"打开浏览器并复制页面地址", WS_TABSTOP, OpenPage, 24, 390, 294, 34, Extensions);
+    add(L"BUTTON", {L"Other versions: enter extension ID", L"其他版本：手动填写扩展 ID"}, WS_TABSTOP, Manual, 24, 438, 270, 28, Choose);
+    add(L"STATIC", {L"Select the browser profile you want to connect.\r\nThen press Ctrl+L → Ctrl+V → Enter to open its extensions page.", L"先在浏览器中选好要连接的配置文件。\r\n再按 Ctrl+L → Ctrl+V → 回车，打开扩展管理页。"}, 0, 0, 24, 338, 632, 44, Extensions, 0, true);
+    add(L"BUTTON", {L"Open browser and copy address", L"打开浏览器并复制页面地址"}, WS_TABSTOP, OpenPage, 24, 390, 294, 34, Extensions);
     address_ = add(L"EDIT", L"", ES_READONLY | ES_AUTOHSCROLL | WS_TABSTOP, 0, 24, 436, 440, 28, Extensions, 0, true);
-    add(L"BUTTON", L"复制页面地址", WS_TABSTOP, CopyAddress, -164, 436, 140, 28, Extensions);
+    add(L"BUTTON", {L"Copy page address", L"复制页面地址"}, WS_TABSTOP, CopyAddress, -182, 436, 158, 28, Extensions);
     developer_hint_ = add(L"STATIC", L"", 0, 0, 24, 342, 632, 28, Developer, 1, true);
-    add(L"STATIC", L"打开开关后，页面会出现加载扩展的按钮。\r\n完成后回到这里，继续下一步。", 0, 0, 24, 384, 632, 46, Developer, 0, true);
+    add(L"STATIC", {L"Enabling this setting reveals a button for loading extensions.\r\nThen return here to continue.", L"打开开关后，页面会出现加载扩展的按钮。\r\n完成后回到这里，继续下一步。"}, 0, 0, 24, 384, 632, 46, Developer, 0, true);
     load_hint_ = add(L"STATIC", L"", 0, 0, 24, 332, 632, 46, Folder, 0, true);
     add(L"EDIT", L"", ES_READONLY | ES_AUTOHSCROLL | WS_TABSTOP, FolderPath, 24, 388, 632, 28, Folder, 0, true);
-    add(L"BUTTON", L"复制扩展文件夹路径", WS_TABSTOP, CopyPath, 24, 430, 190, 32, Folder);
-    add(L"BUTTON", L"查看文件夹", WS_TABSTOP, OpenFolder, 226, 430, 132, 32, Folder);
+    add(L"BUTTON", {L"Copy extension folder path", L"复制扩展文件夹路径"}, WS_TABSTOP, CopyPath, 24, 430, 216, 32, Folder);
+    add(L"BUTTON", {L"Open folder", L"查看文件夹"}, WS_TABSTOP, OpenFolder, 252, 430, 132, 32, Folder);
     connection_ = add(L"STATIC", L"", 0, ConnectionStatus, 24, 338, 632, 32, Confirm, 2, true);
     connection_detail_ = add(L"STATIC", L"", 0, ConnectionDetail, 24, 380, 632, 44, Confirm, 0, true);
-    add(L"BUTTON", L"打开扩展页并复制地址", WS_TABSTOP, ReopenPage, 24, 434, 270, 30, Confirm);
-    add(L"BUTTON", L"连接遇到问题", WS_TABSTOP, Troubleshoot, 310, 434, 194, 30, Confirm);
-    add(L"BUTTON", L"连接新的浏览器", WS_TABSTOP, AddBrowser, 24, 434, 194, 30, Confirm);
-    add(L"STATIC", L"粘贴扩展 ID 或页面地址修复连接", 0, RepairLabel, 24, 162, 632, 26, Repair, 1, true);
-    add(L"STATIC", L"在浏览器的 Glint 页面按 Ctrl+L、Ctrl+C 复制完整地址；\r\n回到此处粘贴即可，也支持扩展管理卡片上的 32 位 ID。", 0, RepairHelp, 24, 204, 632, 44, Repair, 0, true);
+    add(L"BUTTON", {L"Open browser and copy address", L"打开扩展页并复制地址"}, WS_TABSTOP, ReopenPage, 24, 434, 270, 30, Confirm);
+    add(L"BUTTON", {L"Connection help", L"连接遇到问题"}, WS_TABSTOP, Troubleshoot, 310, 434, 194, 30, Confirm);
+    add(L"BUTTON", {L"Connect another browser", L"连接新的浏览器"}, WS_TABSTOP, AddBrowser, 24, 434, 220, 30, Confirm);
+    add(L"STATIC", {L"Paste an extension ID or page address to repair the connection", L"粘贴扩展 ID 或页面地址修复连接"}, 0, RepairLabel, 24, 162, 632, 26, Repair, 1, true);
+    add(L"STATIC", {L"On the Glint page in your browser, press Ctrl+L, Ctrl+C to copy its address.\r\nPaste it here, or use the 32-character ID shown on the extension card.", L"在浏览器的 Glint 页面按 Ctrl+L、Ctrl+C 复制完整地址；\r\n回到此处粘贴即可，也支持扩展管理卡片上的 32 位 ID。"}, 0, RepairHelp, 24, 204, 632, 44, Repair, 0, true);
     repair_id_ = add(L"EDIT", L"", WS_TABSTOP | ES_AUTOHSCROLL, RepairId, 24, 266, 398, 30, Repair);
     SendMessageW(repair_id_, EM_SETLIMITTEXT, 4096, 0);
-    SendMessageW(repair_id_, EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(L"粘贴 32 位 ID 或 chrome-extension:// 页面地址"));
-    add(L"BUTTON", L"保存 ID 并重试", WS_TABSTOP, RegisterRepair, 438, 264, 218, 34, Repair);
+    SendMessageW(repair_id_, EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(i18n::text(L"Paste a 32-character ID or chrome-extension:// address", L"粘贴 32 位 ID 或 chrome-extension:// 页面地址")));
+    add(L"BUTTON", {L"Save ID and retry", L"保存 ID 并重试"}, WS_TABSTOP, RegisterRepair, 438, 264, 218, 34, Repair);
     repair_result_ = add(L"STATIC", L"", 0, RepairResult, 24, 316, 632, 58, Repair, 0, true);
-    add(L"BUTTON", L"返回连接状态", WS_TABSTOP, BackToStatus, 24, 430, 194, 32, Repair);
-    add(L"STATIC", L"仅适用于商店版或自行修改过身份的扩展。\r\n使用 Glint 内置扩展时，返回选择浏览器即可自动配置。", 0, 0, 24, 338, 632, 44, Advanced, 0, true);
+    add(L"BUTTON", {L"Back to connection status", L"返回连接状态"}, WS_TABSTOP, BackToStatus, 24, 430, 218, 32, Repair);
+    add(L"STATIC", {L"For store versions or extensions with a modified identity.\r\nFor the bundled extension, go back and choose a browser for automatic setup.", L"仅适用于商店版或自行修改过身份的扩展。\r\n使用 Glint 内置扩展时，返回选择浏览器即可自动配置。"}, 0, 0, 24, 338, 632, 44, Advanced, 0, true);
     manual_id_ = add(L"EDIT", L"", WS_TABSTOP | ES_AUTOHSCROLL, ManualId, 24, 388, 632, 30, Advanced, 0, true);
     SendMessageW(manual_id_, EM_SETLIMITTEXT, 128, 0);
-    SendMessageW(manual_id_, EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(L"从扩展详情页复制 32 位 ID"));
-    add(L"BUTTON", L"保存此 ID 并检查连接", WS_TABSTOP, RegisterManual, 24, 430, 236, 34, Advanced);
+    SendMessageW(manual_id_, EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(i18n::text(L"Copy the 32-character ID from extension details", L"从扩展详情页复制 32 位 ID")));
+    add(L"BUTTON", {L"Save ID and check connection", L"保存此 ID 并检查连接"}, WS_TABSTOP, RegisterManual, 24, 430, 236, 34, Advanced);
     notice_ = add(L"STATIC", L"", 0, 0, 24, 474, 632, 42, -1, 0, true);
     add(L"STATIC", L"", SS_OWNERDRAW, 0, 24, 524, 632, 1, -1, 0, true);
-    back_ = add(L"BUTTON", L"上一步", WS_TABSTOP, Back, 24, 540, 110, 32, -1);
-    add(L"BUTTON", L"稍后设置", WS_TABSTOP, Later, -362, 540, 116, 32, -1);
+    back_ = add(L"BUTTON", {L"Back", L"上一步"}, WS_TABSTOP, Back, 24, 540, 110, 32, -1);
+    add(L"BUTTON", {L"Set up later", L"稍后设置"}, WS_TABSTOP, Later, -362, 540, 116, 32, -1);
     primary_ = add(L"BUTTON", L"", WS_TABSTOP | BS_DEFPUSHBUTTON, Primary, -234, 540, 210, 32, -1);
     if (browser_launch::find_executable(browser_).empty() && !browser_launch::find_executable(browser_launch::Browser::Edge).empty()) browser_ = browser_launch::Browser::Edge;
     CheckRadioButton(window_, ChooseChrome, ChooseEdge, browser_ == browser_launch::Browser::Edge ? ChooseEdge : ChooseChrome);
@@ -203,7 +239,7 @@ void SetupWindow::layout() {
     for (const auto& c : controls_) {
         const int x = c.x < 0 ? client.right + px(c.x) : px(c.x);
         int width = c.stretch ? client.right - x - px(24) : px(c.width);
-        if (c.window == address_) width -= px(152);
+        if (c.window == address_) width -= px(170);
         MoveWindow(c.window, x, px(c.y) - scroll_, (std::max)(1, width), px(c.height), TRUE);
     }
     InvalidateRect(window_, nullptr, FALSE);
@@ -227,27 +263,32 @@ void SetupWindow::set_page(int page) {
     for (const auto& c : controls_) ShowWindow(c.window, c.page == -1 || c.page == page ? SW_SHOW : SW_HIDE);
     ShowWindow(illustration_, page == Repair ? SW_HIDE : SW_SHOW);
     ShowWindow(back_, page == Choose ? SW_HIDE : SW_SHOW);
-    SetWindowTextW(notice_, L"");
+    set_feedback(notice_, L"", L"");
     if (page == Repair && repair_browser_ != browser_) {
         SetWindowTextW(repair_id_, L"");
-        SetWindowTextW(repair_result_, L"");
+        set_feedback(repair_result_, L"", L"");
         repair_browser_ = browser_;
     }
-    constexpr const wchar_t* headings[] = {L"选择要连接的浏览器", L"打开扩展管理页", L"开启开发者模式", L"加载 Glint 扩展", L"确认连接状态", L"手动连接其他版本", L"修复浏览器连接"};
-    SetWindowTextW(heading_, headings[page]);
-    const bool edge = browser_ == browser_launch::Browser::Edge;
-    const std::wstring progress = page >= Advanced ? std::wstring(L"高级设置 · ") + (edge ? L"Microsoft Edge" : L"Google Chrome")
-        : L"第 " + std::to_wstring(page + 1) + L" 步 / 共 5 步   ·   " + (edge ? L"Microsoft Edge" : L"Google Chrome");
-    SetWindowTextW(progress_, progress.c_str());
-    SetWindowTextW(address_, browser_launch::extension_page(browser_));
-    SetWindowTextW(developer_hint_, edge ? L"在页面左侧，打开“开发人员模式”开关。" : L"在页面右上角，打开“开发者模式”开关。");
-    SetWindowTextW(load_hint_, edge
-        ? L"点击浏览器的“加载解压缩的扩展”。在弹窗底部“文件夹”输入框\r\n粘贴下方路径（Ctrl+V），直接点击“选择文件夹”。"
-        : L"点击浏览器的“加载已解压的扩展程序”。在弹窗底部“文件夹”输入框\r\n粘贴下方路径（Ctrl+V），直接点击“选择文件夹”。");
-    SetWindowTextW(GetDlgItem(window_, FolderPath), extension_directory_.c_str());
+    update_page_text();
     update_browser_status(); update_status(); layout();
     SetFocus(page_focus());
     ensure_visible(page_focus());
+}
+void SetupWindow::update_page_text() {
+    const wchar_t* headings[] = {i18n::text(L"Choose your browser", L"选择要连接的浏览器"), i18n::text(L"Open the extensions page", L"打开扩展管理页"), i18n::text(L"Enable developer mode", L"开启开发者模式"), i18n::text(L"Load the Glint extension", L"加载 Glint 扩展"), i18n::text(L"Check the connection", L"确认连接状态"), i18n::text(L"Connect another version manually", L"手动连接其他版本"), i18n::text(L"Repair the browser connection", L"修复浏览器连接")};
+    SetWindowTextW(heading_, headings[page_]);
+    const bool edge = browser_ == browser_launch::Browser::Edge;
+    const std::wstring progress = page_ >= Advanced
+        ? std::wstring(i18n::text(L"Advanced setup · ", L"高级设置 · ")) + (edge ? L"Microsoft Edge" : L"Google Chrome")
+        : std::wstring(i18n::text(L"Step ", L"第 ")) + std::to_wstring(page_ + 1) +
+            i18n::text(L" of 5   ·   ", L" 步 / 共 5 步   ·   ") + (edge ? L"Microsoft Edge" : L"Google Chrome");
+    SetWindowTextW(progress_, progress.c_str());
+    SetWindowTextW(address_, browser_launch::extension_page(browser_));
+    SetWindowTextW(developer_hint_, edge ? i18n::text(L"Enable “Developer mode” on the left side of the page.", L"在页面左侧，打开“开发人员模式”开关。") : i18n::text(L"Enable “Developer mode” at the top right of the page.", L"在页面右上角，打开“开发者模式”开关。"));
+    SetWindowTextW(load_hint_, edge
+        ? i18n::text(L"Click “Load unpacked” in the browser. Paste the path below into the\r\n“Folder” field at the bottom of the dialog, then click “Select Folder”.", L"点击浏览器的“加载解压缩的扩展”。在弹窗底部“文件夹”输入框\r\n粘贴下方路径（Ctrl+V），直接点击“选择文件夹”。")
+        : i18n::text(L"Click “Load unpacked” in the browser. Paste the path below into the\r\n“Folder” field at the bottom of the dialog, then click “Select Folder”.", L"点击浏览器的“加载已解压的扩展程序”。在弹窗底部“文件夹”输入框\r\n粘贴下方路径（Ctrl+V），直接点击“选择文件夹”。"));
+    SetWindowTextW(GetDlgItem(window_, FolderPath), extension_directory_.c_str());
 }
 void SetupWindow::update_status() {
     if (!window_ || !primary_) return;
@@ -255,19 +296,22 @@ void SetupWindow::update_status() {
     const auto summary = setup::summarize_connections(connections_, edge);
     const auto name = edge ? L"Edge" : L"Chrome";
     const bool connected = summary.profiles != 0;
-    const std::wstring status = std::wstring(name) + (connected ? L" 已连接" : L" 未连接");
+    const std::wstring status = std::wstring(name) + (connected ? i18n::text(L" connected", L" 已连接") : i18n::text(L" not connected", L" 未连接"));
     SetWindowTextW(connection_, status.c_str());
     const std::wstring search_instruction = hotkey_.empty()
-        ? L"点击“开始搜索”。快捷键未启用，可从托盘打开快捷键设置。"
-        : L"点击“开始搜索”，或按 " + hotkey_ + L" 搜索标题和网址。";
+        ? i18n::text(L"Click “Start searching”. Enable a shortcut from the tray menu.", L"点击“开始搜索”。快捷键未启用，可从托盘打开快捷键设置。")
+        : std::wstring(i18n::text(L"Click “Start searching”, or press ", L"点击“开始搜索”，或按 ")) + hotkey_ +
+            i18n::text(L" to search titles and URLs.", L" 搜索标题和网址。");
     const std::wstring detail = summary.profiles
-        ? L"已同步 " + std::to_wstring(summary.profiles) + L" 个配置文件、" + std::to_wstring(summary.tabs) + L" 个标签页。\r\n" + search_instruction
-        : L"尚未收到这个浏览器的标签页。确认 Glint 扩展已启用，\r\n在扩展面板点击“重试连接”，此处会自动更新。";
+        ? std::wstring(i18n::text(L"Synced profiles: ", L"已同步 ")) + std::to_wstring(summary.profiles) +
+            i18n::text(L". Tabs: ", L" 个配置文件、") + std::to_wstring(summary.tabs) + i18n::text(L".\r\n", L" 个标签页。\r\n") + search_instruction
+        : i18n::text(L"No tabs received yet. Enable the Glint extension and click “Retry connection”\r\nin its panel. This status updates automatically.",
+            L"尚未收到这个浏览器的标签页。确认 Glint 扩展已启用，\r\n在扩展面板点击“重试连接”，此处会自动更新。");
     SetWindowTextW(connection_detail_, detail.c_str());
-    constexpr const wchar_t* actions[] = {L"下一步：打开扩展页", L"已打开扩展页，下一步", L"已开启，下一步", L"已加载，检查连接", L"检查连接", L"返回选择浏览器", L"返回连接状态"};
-    SetWindowTextW(primary_, page_ == Confirm && connected ? L"开始搜索" : actions[page_]);
+    const wchar_t* actions[] = {i18n::text(L"Next: extensions", L"下一步：打开扩展页"), i18n::text(L"Page open: next", L"已打开扩展页，下一步"), i18n::text(L"Enabled: next", L"已开启，下一步"), i18n::text(L"Loaded: check connection", L"已加载，检查连接"), i18n::text(L"Check connection", L"检查连接"), i18n::text(L"Back to browser selection", L"返回选择浏览器"), i18n::text(L"Back to connection status", L"返回连接状态")};
+    SetWindowTextW(primary_, page_ == Confirm && connected ? i18n::text(L"Start searching", L"开始搜索") : actions[page_]);
     EnableWindow(primary_, TRUE);
-    SetWindowTextW(GetDlgItem(window_, Later), page_ == Confirm && connected ? L"关闭" : L"稍后设置");
+    SetWindowTextW(GetDlgItem(window_, Later), page_ == Confirm && connected ? i18n::text(L"Close", L"关闭") : i18n::text(L"Set up later", L"稍后设置"));
     if (page_ == Confirm) {
         const auto focus = GetFocus();
         if ((connected && (focus == GetDlgItem(window_, Troubleshoot) || focus == GetDlgItem(window_, ReopenPage))) ||
@@ -275,7 +319,7 @@ void SetupWindow::update_status() {
         ShowWindow(GetDlgItem(window_, Troubleshoot), connected ? SW_HIDE : SW_SHOW);
         ShowWindow(GetDlgItem(window_, ReopenPage), connected ? SW_HIDE : SW_SHOW);
         ShowWindow(GetDlgItem(window_, AddBrowser), connected ? SW_SHOW : SW_HIDE);
-        if (connected) SetWindowTextW(notice_, L"");
+        if (connected) set_feedback(notice_, L"", L"");
     }
     InvalidateRect(illustration_, nullptr, FALSE);
 }
@@ -283,22 +327,27 @@ void SetupWindow::update_browser_status() {
     if (!browser_status_) return;
     const auto name = browser_ == browser_launch::Browser::Edge ? L"Edge" : L"Chrome";
     const bool installed = !browser_launch::find_executable(browser_).empty();
-    const std::wstring detected = installed ? std::wstring(L"已找到 ") + name + L"。每个要连接的配置文件都需要加载一次扩展。"
-        : std::wstring(L"没有找到 ") + name + L" 的安装位置。你仍可继续，并手动打开浏览器。";
+    const std::wstring detected = installed
+        ? std::wstring(i18n::text(L"Found ", L"已找到 ")) + name +
+            i18n::text(L". Load the extension once in each profile you want to connect.", L"。每个要连接的配置文件都需要加载一次扩展。")
+        : std::wstring(i18n::text(L"Could not locate ", L"没有找到 ")) + name +
+            i18n::text(L". You can continue and open the browser manually.", L" 的安装位置。你仍可继续，并手动打开浏览器。");
     SetWindowTextW(browser_status_, detected.c_str());
 }
 bool SetupWindow::prepare() {
     std::wstring error;
     if (!extension_bundle::ensure_extracted(extension_directory_, error)) {
-        SetWindowTextW(notice_, (L"无法准备扩展文件：" + error).c_str()); return false;
+        set_failure(notice_, i18n::text(L"Could not prepare extension files: ", L"无法准备扩展文件：") + error,
+            {L"Could not prepare extension files. Please try again.", L"无法准备扩展文件，请重试。"}); return false;
     }
     if (!setup::register_bundled_host(browser_ == browser_launch::Browser::Edge, error)) {
-        SetWindowTextW(notice_, (L"无法保存本机连接：" + error).c_str()); return false;
+        set_failure(notice_, i18n::text(L"Could not save the local connection: ", L"无法保存本机连接：") + error,
+            {L"Could not save the local connection. Please try again.", L"无法保存本机连接，请重试。"}); return false;
     }
     return true;
 }
 void SetupWindow::dismiss() {
-    if (!setup::dismiss_onboarding()) MessageBoxW(window_, L"无法保存引导偏好，下次启动时可能再次显示。", L"Glint", MB_OK | MB_ICONWARNING);
+    if (!setup::dismiss_onboarding()) MessageBoxW(window_, i18n::text(L"Could not save your setup preference. This guide may appear again next time.", L"无法保存引导偏好，下次启动时可能再次显示。"), L"Glint", MB_OK | MB_ICONWARNING);
     // The themed non-client frame can send WM_SIZE synchronously while hiding.
     // Rebuilding scrollbars/layout in that transition can restore WS_VISIBLE.
     dismissing_ = true;
@@ -307,33 +356,35 @@ void SetupWindow::dismiss() {
 }
 void SetupWindow::register_manual() {
     const auto id = edit_text(manual_id_);
-    if (id.empty()) { SetWindowTextW(notice_, L"请从扩展详情页复制 ID，再粘贴到上方。"); return; }
+    if (id.empty()) { set_feedback(notice_, L"Copy the ID from the extension details page and paste it above.", L"请从扩展详情页复制 ID，再粘贴到上方。"); return; }
     std::wstring error;
     const bool edge = browser_ == browser_launch::Browser::Edge;
-    if (setup::register_hosts(edge ? L"" : id, edge ? id : L"", error) != 0) { SetWindowTextW(notice_, error.c_str()); return; }
+    if (setup::register_hosts(edge ? L"" : id, edge ? id : L"", error) != 0) {
+        set_failure(notice_, error, {L"Could not save the extension ID. Check the ID and try again.", L"无法保存扩展 ID。请检查 ID 后重试。"}); return;
+    }
     manual_flow_ = true; set_page(Confirm);
 }
 void SetupWindow::register_repair() {
     const auto id = repair_extension_id(edit_text(repair_id_));
     if (id.empty()) {
-        SetWindowTextW(repair_result_, L"请输入 32 位小写字母 a–p 的 ID，\r\n或粘贴 Glint 完整的 chrome-extension:// 页面地址。");
+        set_feedback(repair_result_, L"Enter a 32-character ID using lowercase letters a–p,\r\nor paste the full chrome-extension:// address of the Glint page.", L"请输入 32 位小写字母 a–p 的 ID，\r\n或粘贴 Glint 完整的 chrome-extension:// 页面地址。");
         SetFocus(repair_id_);
         return;
     }
     std::wstring error;
     const bool edge = browser_ == browser_launch::Browser::Edge;
     if (setup::register_hosts(edge ? L"" : id, edge ? id : L"", error) != 0) {
-        SetWindowTextW(repair_result_, error.c_str());
+        set_failure(repair_result_, error, {L"Could not save the extension ID. Check the ID and try again.", L"无法保存扩展 ID。请检查 ID 后重试。"});
         return;
     }
     SetWindowTextW(repair_id_, id.c_str());
     SetWindowTextW(manual_id_, id.c_str());
     manual_browser_ = browser_;
-    SetWindowTextW(repair_result_, L"ID 已保存，正在等待扩展自动重试。\r\n也可在浏览器 Glint 页点击“重试连接”，或重新加载扩展。");
+    set_feedback(repair_result_, L"ID saved. Waiting for the extension to retry automatically.\r\nYou can also click “Retry connection” on the Glint page or reload the extension.", L"ID 已保存，正在等待扩展自动重试。\r\n也可在浏览器 Glint 页点击“重试连接”，或重新加载扩展。");
     update_status();
 }
-bool SetupWindow::copy_text(const std::wstring& text, const wchar_t* success) {
-    if (!OpenClipboard(window_)) { SetWindowTextW(notice_, L"剪贴板暂时不可用。可选中上方路径或地址，按 Ctrl+C 复制。"); return false; }
+bool SetupWindow::copy_text(const std::wstring& text, Caption success) {
+    if (!OpenClipboard(window_)) { set_feedback(notice_, L"Clipboard unavailable. Select the path or address above and press Ctrl+C.", L"剪贴板暂时不可用。可选中上方路径或地址，按 Ctrl+C 复制。"); return false; }
     HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, (text.size() + 1) * sizeof(wchar_t));
     bool copied = false;
     if (memory) {
@@ -344,16 +395,19 @@ bool SetupWindow::copy_text(const std::wstring& text, const wchar_t* success) {
         if (!copied) GlobalFree(memory);
     }
     CloseClipboard();
-    SetWindowTextW(notice_, copied ? success : L"复制失败。请选中上方路径或地址，按 Ctrl+C 复制。"); return copied;
+    set_feedback(notice_, copied ? success.english : L"Copy failed. Select the path or address above and press Ctrl+C.",
+        copied ? success.chinese : L"复制失败。请选中上方路径或地址，按 Ctrl+C 复制。"); return copied;
 }
 void SetupWindow::open_extensions() {
-    const bool copied = copy_text(browser_launch::extension_page(browser_), L"页面地址已复制。请在浏览器中按 Ctrl+L、Ctrl+V、回车。");
+    const bool copied = copy_text(browser_launch::extension_page(browser_), {L"Address copied. Press Ctrl+L, Ctrl+V, then Enter in your browser.", L"页面地址已复制。请在浏览器中按 Ctrl+L、Ctrl+V、回车。"});
     std::wstring error;
     if (!browser_launch::open_extensions(browser_, error)) {
-        SetWindowTextW(notice_, L"未能打开浏览器。请复制页面地址，在所选浏览器的地址栏中粘贴并回车。");
-        MessageBoxW(window_, error.c_str(), L"Glint — 请手动打开扩展管理页", MB_OK | MB_ICONWARNING); return;
+        set_feedback(notice_, L"Could not open the browser. Copy the page address, paste it into your browser, and press Enter.", L"未能打开浏览器。请复制页面地址，在所选浏览器的地址栏中粘贴并回车。");
+        MessageBoxW(window_, error.c_str(), i18n::text(L"Glint — Open the extensions page manually", L"Glint — 请手动打开扩展管理页"), MB_OK | MB_ICONWARNING); return;
     }
-    SetWindowTextW(notice_, copied ? L"页面地址已复制。请在浏览器中按 Ctrl+L、Ctrl+V、回车；进入扩展页后再复制文件夹路径。"
+    set_feedback(notice_, copied ? L"Address copied. Press Ctrl+L, Ctrl+V, Enter in your browser; then copy the folder path."
+        : L"Browser requested, but copy failed. Type chrome://extensions/ or edge://extensions/ in its address bar.",
+        copied ? L"页面地址已复制。请在浏览器中按 Ctrl+L、Ctrl+V、回车；进入扩展页后再复制文件夹路径。"
         : L"已请求打开浏览器，但复制失败。请在地址栏手动输入 chrome://extensions/ 或 edge://extensions/。");
 }
 void SetupWindow::command(int id) {
@@ -366,7 +420,7 @@ void SetupWindow::command(int id) {
         else if (page_ >= Extensions && page_ <= Folder) set_page(page_ + 1);
         else if (page_ == Confirm) {
             if (setup::summarize_connections(connections_, browser_ == browser_launch::Browser::Edge).profiles) { dismiss(); show_search_(); }
-            else SetWindowTextW(notice_, L"尚未连接。请在浏览器的 Glint 面板点击“重试连接”，或打开“连接遇到问题”。");
+            else set_feedback(notice_, L"Not connected yet. Click “Retry connection” in the Glint browser panel, or open “Connection help”.", L"尚未连接。请在浏览器的 Glint 面板点击“重试连接”，或打开“连接遇到问题”。");
         } else set_page(page_ == Repair ? Confirm : Choose);
         break;
     case Back: set_page(page_ == Confirm ? (manual_flow_ ? Advanced : Folder) : (page_ >= Advanced ? (page_ == Repair ? Confirm : Choose) : (std::max)(0, page_ - 1))); break;
@@ -388,11 +442,11 @@ void SetupWindow::command(int id) {
     case RegisterManual: register_manual(); break;
     case RegisterRepair: register_repair(); break;
     case OpenPage: case ReopenPage: open_extensions(); break;
-    case CopyAddress: copy_text(browser_launch::extension_page(browser_), L"页面地址已复制。请粘贴到对应浏览器的地址栏，按回车。"); break;
-    case CopyPath: copy_text(extension_directory_.wstring(), L"路径已复制。请粘贴到弹窗底部“文件夹”输入框，再点击“选择文件夹”。"); break;
+    case CopyAddress: copy_text(browser_launch::extension_page(browser_), {L"Address copied. Paste it into the selected browser address bar and press Enter.", L"页面地址已复制。请粘贴到对应浏览器的地址栏，按回车。"}); break;
+    case CopyPath: copy_text(extension_directory_.wstring(), {L"Path copied. Paste it into the “Folder” field at the bottom, then click “Select Folder”.", L"路径已复制。请粘贴到弹窗底部“文件夹”输入框，再点击“选择文件夹”。"}); break;
     case OpenFolder: {
         const auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(window_, L"open", extension_directory_.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
-        if (result <= 32) SetWindowTextW(notice_, L"无法打开文件夹。请复制上方路径，在文件资源管理器地址栏中粘贴。");
+        if (result <= 32) set_feedback(notice_, L"Could not open the folder. Copy the path above and paste it into the File Explorer address bar.", L"无法打开文件夹。请复制上方路径，在文件资源管理器地址栏中粘贴。");
         break;
     }
     case IDCANCEL: case Later: dismiss(); break;

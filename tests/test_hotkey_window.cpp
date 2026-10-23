@@ -1,4 +1,5 @@
 #include "hotkey_window.hpp"
+#include "language.hpp"
 
 #include <commctrl.h>
 
@@ -191,10 +192,31 @@ void check_conflict_layout(HWND owner) {
     for (const UINT dpi : {96u, 144u, 192u}) check_layout(settings_window(), dpi);
     click(IDCANCEL);
 }
+void check_language_refresh(HWND owner) {
+    glint::HotkeyWindow window(owner, [](glint::hotkey::Binding, std::wstring&) { return true; });
+    window.show(glint::hotkey::kDefault);
+    key(window, 'J', MOD_CONTROL | MOD_ALT);
+    glint::i18n::current_language = glint::i18n::Language::English;
+    window.refresh_language();
+    require(text(settings_window()) == L"Glint · Keyboard shortcut", "language refresh updates the window title");
+    require(text(GetDlgItem(settings_window(), IDOK)) == L"&Save", "language refresh updates action labels");
+    require(text(GetDlgItem(settings_window(), Recorder)) == L"Ctrl+Alt+J", "language refresh preserves an unsaved shortcut");
+    for (const UINT dpi : {96u, 144u, 192u}) check_layout(settings_window(), dpi);
+    key(window, VK_F12);
+    require(text(GetDlgItem(settings_window(), Error)).find(L"reserved") != std::wstring::npos,
+        "validation guidance follows the selected language");
+    glint::i18n::current_language = glint::i18n::Language::Chinese;
+    window.refresh_language();
+    require(text(GetDlgItem(settings_window(), Error)).find(L"保留") != std::wstring::npos,
+        "refresh translates current validation without clearing it");
+    require(!IsWindowEnabled(GetDlgItem(settings_window(), IDOK)), "refresh preserves invalid draft state");
+    click(IDCANCEL);
+}
 } // namespace
 
 int main() {
     try {
+        glint::i18n::current_language = glint::i18n::Language::Chinese;
         INITCOMMONCONTROLSEX controls{sizeof(controls), ICC_STANDARD_CLASSES};
         InitCommonControlsEx(&controls);
         HWND owner = CreateWindowExW(0, L"STATIC", L"Glint hotkey settings test owner", WS_OVERLAPPED, 0, 0, 100, 100,
@@ -205,6 +227,7 @@ int main() {
         check_recording_existing_registration(owner);
         check_keyboard_traversal(owner);
         check_conflict_layout(owner);
+        check_language_refresh(owner);
         DestroyWindow(owner);
         std::cout << "Hotkey window tests passed\n";
         return 0;

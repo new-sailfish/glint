@@ -5,14 +5,15 @@ const path = require('node:path');
 const vm = require('node:vm');
 const optionsHtml = fs.readFileSync(path.join(__dirname, '../options.html'), 'utf8');
 
-async function optionsPage(response, storageError) {
+async function optionsPage(response, storageError, settings = {}) {
   const elements = new Map();
   const copied = [];
   const requests = [];
   function element(id) {
     if (!elements.has(id)) {
       const classes = new Set();
-      elements.set(id, {textContent: '', value: '', disabled: false,
+      elements.set(id, {textContent: '', value: '', disabled: false, dataset: {}, attributes: {},
+        setAttribute(name, value) { this.attributes[name] = value; },
         listeners: {}, classList: {
           toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); },
           contains(name) { return classes.has(name); },
@@ -20,17 +21,36 @@ async function optionsPage(response, storageError) {
     }
     return elements.get(id);
   }
-  const api = {runtime: {id: 'abcdefghijklmnopabcdefghijklmnop', sendMessage: async message => {
+  const stored = {profileLabel: '工作', ...settings.stored};
+  const storageListeners = [];
+  const messageListeners = [];
+  const documentElement = {dataset: {}, lang: ''};
+  const localized = [...optionsHtml.matchAll(/<[^>]+data-i18n(?:-[a-z-]+)?="[^"]+"[^>]*>/g)].map(([tag], index) => {
+    const item = element(tag.match(/\bid="([^"]+)"/)?.[1] || `localized-${index}`);
+    for (const [, attribute, value] of tag.matchAll(/data-(i18n(?:-[a-z-]+)?)="([^"]+)"/g)) {
+      item.dataset[attribute.replace(/-([a-z])/g, (_, char) => char.toUpperCase())] = value;
+    }
+    return item;
+  });
+  const api = {i18n: {getUILanguage: () => settings.locale || 'zh-CN'}, runtime: {id: 'abcdefghijklmnopabcdefghijklmnop',
+    onMessage: {addListener: listener => messageListeners.push(listener)}, sendMessage: async message => {
     requests.push(message);
     if (response instanceof Error) throw response;
     return response;
-  }}, storage: {local: {get: async () => ({profileLabel: '工作'}), set: async () => { if (storageError) throw storageError; }}}};
+  }}, storage: {onChanged: {addListener: listener => storageListeners.push(listener)}, local: {
+    get: async () => { if (settings.readError) throw settings.readError; return {...stored}; },
+    set: async values => { if (storageError) throw storageError; Object.assign(stored, values); }}}};
   const context = vm.createContext({chrome: api, navigator: {userAgent: 'Edg/130.0',
     clipboard: {writeText: async text => copied.push(text)}}, document: {getElementById: element,
-    addEventListener: () => {}}, setTimeout: () => 1, clearTimeout() {}, setInterval: () => 1});
+    documentElement, querySelectorAll: () => localized, addEventListener: () => {}},
+    setTimeout: () => 1, clearTimeout() {}, setInterval: () => 1});
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../background-core.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../options.js'), 'utf8'), context);
   await new Promise(resolve => setImmediate(resolve));
-  return {element, copied, requests, api, click: async id => element(id).listeners.click?.(),
+  return {element, copied, requests, api, stored, documentElement, localized,
+    emitLanguage: (language, extra = {}) => messageListeners.forEach(listener => listener({type: 'glint_language_changed', language, ...extra})),
+    emitCachedLanguage: value => storageListeners.forEach(listener => listener({desktopLanguage: {newValue: value}}, 'local')),
+    click: async id => element(id).listeners.click?.(),
     submit: async () => element('profile-form').listeners.submit({preventDefault() {}})};
 }
 
@@ -42,6 +62,92 @@ test('setup shows the current browser and copies the actual extension ID', async
   assert.deepEqual(page.copied, [page.api.runtime.id]);
   assert.match(page.element('copy-status').textContent, /Glint.*连接遇到问题.*粘贴.*保存/);
   assert.doesNotMatch(page.element('copy-status').textContent, /其他版本/);
+});
+
+test('Chinese browser UI languages select Chinese and other languages select English', async () => {
+  for (const locale of ['zh-CN', 'zh-TW', 'zh-HK', 'zh']) {
+    const page = await optionsPage({ok: true, portOpen: true, desktopConnected: true}, null, {locale});
+    assert.equal(page.documentElement.lang, 'zh-CN');
+    assert.equal(page.element('connection-status').textContent, '已连接 Glint');
+  }
+  for (const locale of ['en-US', 'ja-JP', 'fr-FR']) {
+    const page = await optionsPage({ok: true, portOpen: true, desktopConnected: true}, null, {locale});
+    assert.equal(page.documentElement.lang, 'en');
+    assert.equal(page.element('connection-status').textContent, 'Connected to Glint');
+  }
+});
+
+test('cached desktop language takes precedence offline and old profile choices are ignored', async () => {
+  const page = await optionsPage({ok: true, portOpen: true, desktopConnected: false}, null,
+    {locale: 'zh-TW', stored: {desktopLanguage: {preference: 'en', language: 'en'}, language: 'zh-CN'}});
+  assert.equal(page.documentElement.lang, 'en');
+  assert.match(page.element('connection-status').textContent, /Glint is not running/);
+  page.emitLanguage('zh-CN');
+  assert.equal(page.documentElement.lang, 'zh-CN');
+  assert.equal(page.element('connection-status').textContent, 'Glint 未运行，等待自动连接');
+  const fresh = await optionsPage({ok: true, portOpen: false}, null, {locale: 'en-US', stored: {language: 'zh-CN'}});
+  assert.equal(fresh.documentElement.lang, 'en');
+  assert.doesNotMatch(optionsHtml, /<select\b|id="language"/);
+  assert.match(optionsHtml, /data-i18n="languageFollowsDesktop"/);
+});
+
+test('worker status supplies the current desktop language even when reading the cache fails', async () => {
+  const unavailable = await optionsPage({ok: true, portOpen: true, desktopConnected: true, language: 'zh-CN'}, null,
+    {locale: 'en-US', readError: new Error('Storage unavailable')});
+  assert.equal(unavailable.documentElement.lang, 'zh-CN');
+  assert.equal(unavailable.element('connection-status').textContent, '已连接 Glint');
+});
+
+test('desktop broadcasts update open panels immediately and invalid language messages are ignored', async () => {
+  const page = await optionsPage({ok: true, portOpen: false}, null, {locale: 'en-US'});
+  page.emitLanguage('zh-CN');
+  assert.equal(page.documentElement.lang, 'zh-CN');
+  page.emitLanguage('fr');
+  assert.equal(page.documentElement.lang, 'zh-CN');
+  page.emitCachedLanguage({preference: 'en', language: 'en'});
+  assert.equal(page.documentElement.lang, 'zh-CN', 'delayed storage events cannot undo a newer desktop broadcast');
+  const core = require('../background-core.js');
+  assert.ok(page.localized.length > 20);
+  for (const item of page.localized) {
+    for (const key of Object.values(item.dataset)) {
+      assert.ok(core.messages.en[key], `English translation missing: ${key}`);
+      assert.ok(core.messages['zh-CN'][key], `Chinese translation missing: ${key}`);
+    }
+  }
+});
+
+test('older status revisions cannot undo newer language and worker restart accepts a fresh revision', async () => {
+  const page = await optionsPage({ok: true, portOpen: true, desktopConnected: true,
+    language: 'en', languageRevision: 1, languageSession: 'worker-a'}, null, {locale: 'en-US'});
+  page.element('profile-label').value = 'Unsaved label';
+  page.emitLanguage('zh-CN', {languageRevision: 2, languageSession: 'worker-a'});
+  await page.click('retry');
+  assert.equal(page.documentElement.lang, 'zh-CN');
+  assert.equal(page.element('profile-label').value, 'Unsaved label');
+  page.emitLanguage('en', {languageRevision: 0, languageSession: 'worker-b'});
+  assert.equal(page.documentElement.lang, 'en');
+});
+
+test('English failures preserve the original browser diagnostics', async () => {
+  const error = 'Specified native messaging host not found.';
+  const page = await optionsPage({ok: true, portOpen: false, error}, null, {locale: 'en-US'});
+  assert.equal(page.element('connection-status').textContent, 'Bridge connection not established');
+  assert.match(page.element('connection-detail').textContent, /cannot find the Glint native messaging host/);
+  assert.ok(page.element('connection-detail').textContent.includes(error));
+});
+
+test('Glint-owned connection errors rerender in the selected popup language', async () => {
+  for (const [errorCode, en, zh] of [
+    ['native_closed', 'Native messaging connection closed.', '本机通信连接已关闭。'],
+    ['bridge_unavailable', 'The extension background service could not start.', '扩展后台服务未能启动。'],
+  ]) {
+    const page = await optionsPage({ok: false, errorCode, error: 'old-language diagnostic'}, null, {locale: 'en-US'});
+    assert.ok(page.element('connection-detail').textContent.includes(en));
+    assert.ok(!page.element('connection-detail').textContent.includes('old-language diagnostic'));
+    page.emitLanguage('zh-CN');
+    assert.ok(page.element('connection-detail').textContent.includes(zh));
+    assert.ok(!page.element('connection-detail').textContent.includes(en));
+  }
 });
 
 test('extension ID and copy action are visible beside connection status without opening details', () => {

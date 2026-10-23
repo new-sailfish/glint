@@ -82,6 +82,15 @@ namespace Glint {
             if (!task.Wait(timeoutMs)) throw new TimeoutException("Native status timed out.");
             return task.GetAwaiter().GetResult();
         }
+
+        public static void WriteFrame(Stream stream, string message) {
+            var payload = new UTF8Encoding(false, true).GetBytes(message);
+            var header = BitConverter.GetBytes((uint)payload.Length);
+            if (!BitConverter.IsLittleEndian) Array.Reverse(header);
+            stream.Write(header, 0, header.Length);
+            stream.Write(payload, 0, payload.Length);
+            stream.Flush();
+        }
     }
 }
 '@
@@ -135,6 +144,17 @@ try {
       throw 'The connected desktop generation must be a strictly increasing integer.'
     }
     $generation = $status.generation
+    # Exercise the real desktop reply and native relay, including later
+    # reconnects. This never changes the user's saved language preference.
+    $hello = @{ type = 'hello'; version = 1; desktopGeneration = $generation;
+      sessionId = "lifecycle-$cycle"; profileId = 'lifecycle-smoke'; browser = 'chrome' } | ConvertTo-Json -Compress
+    [Glint.DesktopLifecycleSmoke]::WriteFrame($nativeProcess.StandardInput.BaseStream, $hello)
+    $language = [Glint.DesktopLifecycleSmoke]::ReadFrame($nativeProcess.StandardOutput.BaseStream, 5000) | ConvertFrom-Json
+    if ($language.type -ne 'language_settings' -or $language.version -ne 1 -or
+        $language.preference -notin @('system', 'en', 'zh-CN') -or $language.language -notin @('en', 'zh-CN') -or
+        ($language.preference -ne 'system' -and $language.preference -ne $language.language)) {
+      throw 'The desktop did not send valid language settings after the browser hello.'
+    }
     $desktopPid = $desktopProcess.Id
     $exitClock = [Diagnostics.Stopwatch]::StartNew()
     [Glint.DesktopLifecycleSmoke]::QuitDesktop($desktopPid)
@@ -154,6 +174,7 @@ try {
       Cycle = $cycle; DesktopPID = $desktopPid; BridgePID = $bridgePid
       Generation = $generation; TrayExitMilliseconds = $exitClock.Elapsed.TotalMilliseconds
       WaitingAfterExit = $true
+      LanguagePreference = $language.preference; Language = $language.language
     }
   }
 
@@ -185,7 +206,7 @@ try {
     if (-not [IO.Directory]::Exists($directory)) { $null = New-Item -ItemType Directory -Path $directory -Force }
     [IO.File]::WriteAllText($reportFile, ($report | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
   }
-  Write-Output ("Lifecycle smoke passed: 3 tray exits, one bridge PID, automatic desktop reconnect, browser EOF exit; offline CPU {0:N3} ms / {1:N3} s." -f $offlineCpu, $sample.Elapsed.TotalSeconds)
+  Write-Output ("Lifecycle smoke passed: 3 tray exits, one bridge PID, automatic desktop reconnect with language sync, browser EOF exit; offline CPU {0:N3} ms / {1:N3} s." -f $offlineCpu, $sample.Elapsed.TotalSeconds)
   if ($ReportPath) { Write-Output "Report: $reportFile" }
 } finally {
   # Only touch processes created by this invocation; never adopt an existing app.

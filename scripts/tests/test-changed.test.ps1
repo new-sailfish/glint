@@ -15,11 +15,13 @@ $failures = [Collections.Generic.List[string]]::new()
 $passed = 0
 $caseNumber = 0
 $ctestNames = @(
-  'glint_core', 'glint_setup_progress', 'glint_connection_overview',
+  'glint_core', 'glint_setup_progress', 'glint_connection_overview', 'glint_language',
   'glint_search_navigation', 'glint_hotkey', 'glint_hotkey_window',
   'glint_pipe_server', 'glint_foreground_permission', 'glint_native_host',
   'glint_registration', 'glint_bridge_installation', 'glint_extension_identity',
-  'glint_extension_bundle', 'glint_browser_launch', 'glint_setup_window'
+  'glint_extension_bundle', 'glint_browser_launch', 'glint_setup_window',
+  'glint_update_schedule', 'glint_update_feed', 'glint_update_install',
+  'glint_update_controller', 'glint_update_window', 'glint_update_process'
 )
 $extensionNames = @('background-core', 'background', 'manifest', 'options')
 $wrapper = Join-Path $temporaryRoot 'invoke-selector.ps1'
@@ -155,6 +157,15 @@ function Test-Case([string]$Name, [scriptblock]$Body) {
 }
 
 try {
+  Test-Case 'update controller selects scheduling and controller regression tests' {
+    $result = Invoke-Selector @{ List = $true; Files = @('src/update_controller.cpp') }
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_update_controller', 'glint_update_schedule')
+    Assert-Contains $result.Output 'maps src/update_controller.cpp'
+  }
+  Test-Case 'update downloader selects feed and installer integrity tests' {
+    $result = Invoke-Selector @{ List = $true; Files = @('src/update_feed.cpp') }
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_update_feed', 'glint_update_install', 'glint_update_process')
+  }
   Test-Case 'baseline includes core and bridge smoke checks' {
     $result = Invoke-Selector
     Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation')
@@ -205,11 +216,20 @@ try {
     Assert-Tests $result 'Extension' @($extensionNames | ForEach-Object { "test/$_.test.js" })
   }
   Test-Case 'embedded extension runtime and icons select native bundle tests' {
-    foreach ($file in @('extension/options.js', 'extension/icon-128.png')) {
+    foreach ($file in @('extension/options.js', 'extension/icon-128.png', 'extension/_locales/zh_CN/messages.json')) {
       $result = Invoke-Selector @{ List = $true; Files = @($file) }
       Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_extension_bundle')
       Assert-Contains $result.Output "embedded extension resource $file"
     }
+  }
+  Test-Case 'language changes include resolver and native UI regression tests' {
+    $result = Invoke-Selector @{ List = $true; Files = @('src/language.hpp') }
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_language',
+      'glint_connection_overview', 'glint_setup_window', 'glint_hotkey_window')
+  }
+  Test-Case 'language sync selects message contract and relay tests' {
+    $result = Invoke-Selector @{ List = $true; Files = @('src/language_sync.hpp') }
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_bridge_installation', 'glint_language', 'glint_native_host')
   }
   Test-Case 'removed extension tests select the remaining extension suite' {
     Remove-Item -LiteralPath (Join-Path $fixture 'extension/test/options.test.js')

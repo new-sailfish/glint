@@ -15,6 +15,7 @@
   <link rel="canonical" href="https://new-sailfish.github.io/glint/">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2724%27 fill=%27%232c61bd%27/%3E%3Cpath d=%27M50 8L60.8 39.2 92 50 60.8 60.8 50 92 39.2 60.8 8 50 39.2 39.2Z%27 fill=%27white%27/%3E%3Cpath d=%27M50 27.5L56.2 43.8 72.5 50 56.2 56.2 50 72.5 43.8 56.2 27.5 50 43.8 43.8Z%27 fill=%27%23dce8ff%27/%3E%3Ccircle cx=%2775%27 cy=%2725%27 r=%277%27 fill=%27%23a9c6ff%27/%3E%3C/svg%3E" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
+  <script src="i18n.js" defer></script>
   <script src="app.js" defer></script>
   <title>Glint · 跨浏览器查找已打开的标签页</title>
 </head>
@@ -27,6 +28,7 @@
       <a href="#setup">连接浏览器</a>
       <a class="nav-download" href="#download">下载 <span aria-hidden="true">↗</span></a>
     </nav>
+    <label class="language-control" for="site-language"><span>语言</span><select id="site-language"><option value="system">跟随系统</option><option value="en">English</option><option value="zh-CN">中文</option></select></label>
   </header>
 
   <main id="main">

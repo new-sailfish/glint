@@ -1,6 +1,7 @@
 #include "native_host.hpp"
 #include "win_common.hpp"
 #include "glint/core.hpp"
+#include "language_sync.hpp"
 
 #include <windows.h>
 
@@ -250,6 +251,9 @@ void run_case(std::string_view name) {
         require(relay.receive_desktop() == relay.browser_message(hello), "preserve browser frame payload");
         relay.send_desktop(response);
         require(relay.receive_browser() == response, "preserve desktop frame payload");
+        const auto language = glint::language_settings_message(glint::i18n::Preference::English, glint::i18n::Language::English);
+        relay.send_desktop(language);
+        require(relay.receive_browser() == language, "desktop language settings reach the extension unchanged over the live relay");
         relay.browser_eof();
     } else if (name == "browser-eof") {
         relay.browser_eof();
@@ -261,6 +265,9 @@ void run_case(std::string_view name) {
         const auto stale_frame = relay.browser_frame(R"({"type":"upsert","version":1,"tab":{"tabId":900}})");
         relay.send_browser(hello);
         require(relay.receive_desktop() == relay.browser_message(hello), "initial metadata reaches initial desktop");
+        const auto initial_language = glint::language_settings_message(glint::i18n::Preference::English, glint::i18n::Language::English);
+        relay.send_desktop(initial_language);
+        require(relay.receive_browser() == initial_language, "initial desktop supplies its language after hello");
         relay.disconnect_desktop();
         relay.send_browser_bytes(stale_frame);
         relay.connect_desktop();
@@ -270,6 +277,10 @@ void run_case(std::string_view name) {
         constexpr auto snapshot = R"({"type":"snapshot","version":1,"tabs":[]})";
         relay.send_browser(hello);
         require(relay.receive_desktop() == relay.browser_message(hello), "new desktop receives a fresh hello and no offline increment");
+        const auto current_language = glint::language_settings_message(glint::i18n::Preference::System, glint::i18n::Language::Chinese);
+        relay.send_desktop(current_language);
+        require(relay.receive_browser() == current_language,
+            "reconnected desktop refreshes the extension language on the same native port before a snapshot");
         relay.send_browser(snapshot);
         require(relay.receive_desktop() == relay.browser_message(snapshot), "same relay forwards the fresh reconnect snapshot");
         relay.browser_eof();

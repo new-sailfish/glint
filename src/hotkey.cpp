@@ -1,4 +1,5 @@
 #include "hotkey.hpp"
+#include "language.hpp"
 
 namespace glint::hotkey {
 namespace {
@@ -30,41 +31,68 @@ std::wstring key_name(UINT key) {
     if (key >= VK_F1 && key <= VK_F24) return L"F" + std::to_wstring(key - VK_F1 + 1);
     if (key == VK_SPACE) return L"Space";
 
+    if (key >= VK_NUMPAD0 && key <= VK_NUMPAD9)
+        return std::wstring(i18n::text(L"Num ", L"小键盘 ")) + std::to_wstring(key - VK_NUMPAD0);
+    // Named keys follow Glint's language, independently of the Windows display
+    // language. Physical letters, digits, and modifier legends stay familiar.
+    switch (key) {
+    case VK_BACK: return i18n::text(L"Backspace", L"退格");
+    case VK_TAB: return L"Tab";
+    case VK_RETURN: return L"Enter";
+    case VK_PAUSE: return i18n::text(L"Pause", L"暂停");
+    case VK_CAPITAL: return L"Caps Lock";
+    case VK_ESCAPE: return L"Esc";
+    case VK_PRIOR: return i18n::text(L"Page Up", L"上一页");
+    case VK_NEXT: return i18n::text(L"Page Down", L"下一页");
+    case VK_END: return L"End";
+    case VK_HOME: return L"Home";
+    case VK_LEFT: return i18n::text(L"Left", L"左方向键");
+    case VK_UP: return i18n::text(L"Up", L"上方向键");
+    case VK_RIGHT: return i18n::text(L"Right", L"右方向键");
+    case VK_DOWN: return i18n::text(L"Down", L"下方向键");
+    case VK_SNAPSHOT: return i18n::text(L"Print Screen", L"截屏");
+    case VK_INSERT: return i18n::text(L"Insert", L"插入");
+    case VK_DELETE: return i18n::text(L"Delete", L"删除");
+    case VK_NUMLOCK: return L"Num Lock";
+    case VK_SCROLL: return L"Scroll Lock";
+    case VK_MULTIPLY: return i18n::text(L"Num *", L"小键盘 *");
+    case VK_ADD: return i18n::text(L"Num +", L"小键盘 +");
+    case VK_SEPARATOR: return i18n::text(L"Num Separator", L"小键盘分隔符");
+    case VK_SUBTRACT: return i18n::text(L"Num -", L"小键盘 -");
+    case VK_DECIMAL: return i18n::text(L"Num .", L"小键盘 .");
+    case VK_DIVIDE: return i18n::text(L"Num /", L"小键盘 /");
+    case VK_BROWSER_BACK: return i18n::text(L"Browser Back", L"浏览器后退");
+    case VK_BROWSER_FORWARD: return i18n::text(L"Browser Forward", L"浏览器前进");
+    case VK_BROWSER_REFRESH: return i18n::text(L"Browser Refresh", L"浏览器刷新");
+    case VK_BROWSER_STOP: return i18n::text(L"Browser Stop", L"浏览器停止");
+    case VK_BROWSER_SEARCH: return i18n::text(L"Browser Search", L"浏览器搜索");
+    case VK_BROWSER_FAVORITES: return i18n::text(L"Browser Favorites", L"浏览器收藏夹");
+    case VK_BROWSER_HOME: return i18n::text(L"Browser Home", L"浏览器主页");
+    case VK_VOLUME_MUTE: return i18n::text(L"Volume Mute", L"静音");
+    case VK_VOLUME_DOWN: return i18n::text(L"Volume Down", L"降低音量");
+    case VK_VOLUME_UP: return i18n::text(L"Volume Up", L"提高音量");
+    case VK_MEDIA_NEXT_TRACK: return i18n::text(L"Next Track", L"下一曲");
+    case VK_MEDIA_PREV_TRACK: return i18n::text(L"Previous Track", L"上一曲");
+    case VK_MEDIA_STOP: return i18n::text(L"Media Stop", L"停止播放");
+    case VK_MEDIA_PLAY_PAUSE: return i18n::text(L"Play/Pause", L"播放/暂停");
+    case VK_LAUNCH_MAIL: return i18n::text(L"Mail", L"邮件");
+    case VK_LAUNCH_MEDIA_SELECT: return i18n::text(L"Media", L"媒体");
+    case VK_LAUNCH_APP1: return i18n::text(L"Launch App 1", L"启动应用 1");
+    case VK_LAUNCH_APP2: return i18n::text(L"Launch App 2", L"启动应用 2");
+    case VK_SELECT: return i18n::text(L"Select", L"选择");
+    case VK_PRINT: return i18n::text(L"Print", L"打印");
+    case VK_EXECUTE: return i18n::text(L"Execute", L"执行");
+    case VK_HELP: return i18n::text(L"Help", L"帮助");
+    case VK_APPS: return i18n::text(L"Menu", L"菜单");
+    default: break;
+    }
+
+    // Punctuation follows the user's physical keyboard layout.
     const auto scan = MapVirtualKeyW(key, MAPVK_VK_TO_VSC_EX);
-    LONG key_data = static_cast<LONG>((scan & 0xff) << 16);
-    if ((scan & 0xff00) != 0 || key == VK_LEFT || key == VK_RIGHT || key == VK_UP || key == VK_DOWN ||
-        key == VK_PRIOR || key == VK_NEXT || key == VK_END || key == VK_HOME ||
-        key == VK_INSERT || key == VK_DELETE || key == VK_NUMLOCK) key_data |= 1 << 24;
+    const LONG key_data = static_cast<LONG>((scan & 0xff) << 16) | ((scan & 0xff00) ? 1 << 24 : 0);
     wchar_t text[128]{};
     if (scan != 0 && GetKeyNameTextW(key_data, text, static_cast<int>(std::size(text))) > 0) return text;
-
-    // Media and browser keys can lack scan codes on the active keyboard layout.
-    switch (key) {
-    case VK_BROWSER_BACK: return L"Browser Back";
-    case VK_BROWSER_FORWARD: return L"Browser Forward";
-    case VK_BROWSER_REFRESH: return L"Browser Refresh";
-    case VK_BROWSER_STOP: return L"Browser Stop";
-    case VK_BROWSER_SEARCH: return L"Browser Search";
-    case VK_BROWSER_FAVORITES: return L"Browser Favorites";
-    case VK_BROWSER_HOME: return L"Browser Home";
-    case VK_VOLUME_MUTE: return L"Volume Mute";
-    case VK_VOLUME_DOWN: return L"Volume Down";
-    case VK_VOLUME_UP: return L"Volume Up";
-    case VK_MEDIA_NEXT_TRACK: return L"Next Track";
-    case VK_MEDIA_PREV_TRACK: return L"Previous Track";
-    case VK_MEDIA_STOP: return L"Media Stop";
-    case VK_MEDIA_PLAY_PAUSE: return L"Play/Pause";
-    case VK_LAUNCH_MAIL: return L"Mail";
-    case VK_LAUNCH_MEDIA_SELECT: return L"Media";
-    case VK_LAUNCH_APP1: return L"Launch App 1";
-    case VK_LAUNCH_APP2: return L"Launch App 2";
-    case VK_SELECT: return L"Select";
-    case VK_PRINT: return L"Print";
-    case VK_EXECUTE: return L"Execute";
-    case VK_HELP: return L"Help";
-    case VK_APPS: return L"Menu";
-    default: return L"Key " + std::to_wstring(key);
-    }
+    return std::wstring(i18n::text(L"Key ", L"按键 ")) + std::to_wstring(key);
 }
 
 bool read_dword(HKEY key, const wchar_t* name, DWORD& value) {
@@ -74,16 +102,19 @@ bool read_dword(HKEY key, const wchar_t* name, DWORD& value) {
 }
 
 std::wstring invalid_binding_error() {
-    return L"普通键须含 Ctrl、Alt 或 Win，可叠加 Shift；也可使用 F1–F24（F12 除外）。";
+    return i18n::text(L"Use Ctrl, Alt, or Win with a key; Shift is optional. You can also use F1–F24, except F12.",
+        L"普通键须含 Ctrl、Alt 或 Win，可叠加 Shift；也可使用 F1–F24（F12 除外）。");
 }
 
 std::wstring registration_error(Binding binding, DWORD code) {
     const auto label = name(binding);
     if (code == ERROR_HOTKEY_ALREADY_REGISTERED) {
-        return L"快捷键 " + label + L" 已被其他程序或 Windows 占用，请换一个组合。";
+        return std::wstring(i18n::text(L"Shortcut ", L"快捷键 ")) + label +
+            i18n::text(L" is already in use by another app or Windows. Choose another shortcut.", L" 已被其他程序或 Windows 占用，请换一个组合。");
     }
-    return L"无法注册快捷键 " + label + L"，可能已被其他程序或 Windows 占用，请换一个组合。（错误 " +
-        std::to_wstring(code) + L"）";
+    return std::wstring(i18n::text(L"Could not register shortcut ", L"无法注册快捷键 ")) + label +
+        i18n::text(L". It may be in use by another app or Windows. Choose another shortcut. (Error ",
+            L"，可能已被其他程序或 Windows 占用，请换一个组合。（错误 ") + std::to_wstring(code) + i18n::text(L")", L"）");
 }
 
 } // namespace
@@ -138,7 +169,8 @@ bool save(Binding binding, std::wstring& error) {
         RegCloseKey(key);
     }
     if (status != ERROR_SUCCESS) {
-        error = L"无法保存快捷键设置。（错误 " + std::to_wstring(status) + L"）";
+        error = std::wstring(i18n::text(L"Could not save shortcut settings. (Error ", L"无法保存快捷键设置。（错误 ")) +
+            std::to_wstring(status) + i18n::text(L")", L"）");
         return false;
     }
     error.clear();
@@ -149,7 +181,7 @@ Registration::~Registration() { stop(); }
 
 bool Registration::start(HWND window, Binding binding, std::wstring& error) {
     if (!window || !IsWindow(window)) {
-        error = L"无法注册快捷键：主窗口尚未就绪。";
+        error = i18n::text(L"Could not register the shortcut: the main window is not ready.", L"无法注册快捷键：主窗口尚未就绪。");
         return false;
     }
     if (!valid(binding)) {
@@ -187,7 +219,7 @@ bool Registration::change(Binding binding, std::wstring& error) {
         return false;
     }
     if (!window_ || !IsWindow(window_)) {
-        error = L"无法注册快捷键：主窗口尚未就绪。";
+        error = i18n::text(L"Could not register the shortcut: the main window is not ready.", L"无法注册快捷键：主窗口尚未就绪。");
         return false;
     }
     if (active_ && current_ == binding) return save(binding, error);

@@ -1,4 +1,5 @@
 #include "hotkey_window.hpp"
+#include "language.hpp"
 #include "ui_theme.hpp"
 
 #include <commctrl.h>
@@ -46,7 +47,7 @@ void HotkeyWindow::paint(HDC dc) const {
 void HotkeyWindow::show(hotkey::Binding current) {
     if (visible()) { SetForegroundWindow(window_); SetFocus(recorder_); return; }
     if (!window_ && !create()) {
-        MessageBoxW(owner_, L"无法打开快捷键设置，请稍后重试。", L"Glint", MB_OK | MB_ICONERROR);
+        MessageBoxW(owner_, i18n::text(L"Could not open keyboard shortcut settings. Please try again.", L"无法打开快捷键设置，请稍后重试。"), L"Glint", MB_OK | MB_ICONERROR);
         return;
     }
     draft_ = current;
@@ -77,22 +78,22 @@ bool HotkeyWindow::create() {
     const int width = frame.right - frame.left, height = frame.bottom - frame.top;
     const int x = monitor.rcWork.left + ((monitor.rcWork.right - monitor.rcWork.left) - width) / 2;
     const int y = monitor.rcWork.top + ((monitor.rcWork.bottom - monitor.rcWork.top) - height) / 2;
-    window_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_CONTROLPARENT, kClass, L"Glint · 快捷键设置", style,
+    window_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_CONTROLPARENT, kClass, i18n::text(L"Glint · Keyboard shortcut", L"Glint · 快捷键设置"), style,
         x, y, width, height, owner_, nullptr, klass.hInstance, this);
     if (!window_) return false;
     const auto add = [&](const wchar_t* type, const wchar_t* caption, DWORD control_style, int id, DWORD ex = 0) {
         return CreateWindowExW(ex, type, caption, WS_CHILD | WS_VISIBLE | control_style, 0, 0, 0, 0,
             window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), klass.hInstance, nullptr);
     };
-    heading_ = add(L"STATIC", L"设置搜索快捷键", 0, 0);
-    instruction_ = add(L"STATIC", L"点击输入框，然后按下想使用的组合键。", 0, 0);
-    label_ = add(L"STATIC", L"唤起搜索(&K)", 0, 0);
+    heading_ = add(L"STATIC", i18n::text(L"Set your search shortcut", L"设置搜索快捷键"), 0, 0);
+    instruction_ = add(L"STATIC", i18n::text(L"Click the field, then press your preferred shortcut.", L"点击输入框，然后按下想使用的组合键。"), 0, 0);
+    label_ = add(L"STATIC", i18n::text(L"Open search (&K)", L"唤起搜索(&K)"), 0, 0);
     recorder_ = add(L"EDIT", L"", WS_TABSTOP | ES_READONLY | ES_AUTOHSCROLL, Recorder, WS_EX_CLIENTEDGE);
-    hint_ = add(L"STATIC", L"普通键须含 Ctrl/Alt/Win，可加 Shift；功能键可单用。\r\nTab 切换输入框和按钮，Enter 保存，Esc 放弃修改。", 0, 0);
+    hint_ = add(L"STATIC", i18n::text(L"Use Ctrl/Alt/Win with a key, or a function key.\r\nTab moves focus. Enter saves. Esc cancels.", L"普通键须含 Ctrl/Alt/Win，可加 Shift；功能键可单用。\r\nTab 切换输入框和按钮，Enter 保存，Esc 放弃修改。"), 0, 0);
     error_ = add(L"STATIC", L"", 0, Error);
-    defaults_ = add(L"BUTTON", L"恢复默认(&D)", WS_TABSTOP | BS_PUSHBUTTON, Defaults);
-    save_ = add(L"BUTTON", L"保存(&S)", WS_TABSTOP | BS_DEFPUSHBUTTON, IDOK);
-    cancel_ = add(L"BUTTON", L"取消", WS_TABSTOP | BS_PUSHBUTTON, IDCANCEL);
+    defaults_ = add(L"BUTTON", i18n::text(L"&Defaults", L"恢复默认(&D)"), WS_TABSTOP | BS_PUSHBUTTON, Defaults);
+    save_ = add(L"BUTTON", i18n::text(L"&Save", L"保存(&S)"), WS_TABSTOP | BS_DEFPUSHBUTTON, IDOK);
+    cancel_ = add(L"BUTTON", i18n::text(L"Cancel", L"取消"), WS_TABSTOP | BS_PUSHBUTTON, IDCANCEL);
     if (!heading_ || !instruction_ || !label_ || !recorder_ || !hint_ || !error_ || !defaults_ || !save_ || !cancel_) {
         DestroyWindow(window_); return false;
     }
@@ -103,6 +104,25 @@ bool HotkeyWindow::create() {
     update_fonts();
     layout();
     return true;
+}
+void HotkeyWindow::refresh_language() {
+    if (!window_) return;
+    SetWindowTextW(window_, i18n::text(L"Glint · Keyboard shortcut", L"Glint · 快捷键设置"));
+    SetWindowTextW(heading_, i18n::text(L"Set your search shortcut", L"设置搜索快捷键"));
+    SetWindowTextW(instruction_, i18n::text(L"Click the field, then press your preferred shortcut.", L"点击输入框，然后按下想使用的组合键。"));
+    SetWindowTextW(label_, i18n::text(L"Open search (&K)", L"唤起搜索(&K)"));
+    SetWindowTextW(hint_, i18n::text(L"Use Ctrl/Alt/Win with a key, or a function key.\r\nTab moves focus. Enter saves. Esc cancels.",
+        L"普通键须含 Ctrl/Alt/Win，可加 Shift；功能键可单用。\r\nTab 切换输入框和按钮，Enter 保存，Esc 放弃修改。"));
+    SetWindowTextW(defaults_, i18n::text(L"&Defaults", L"恢复默认(&D)"));
+    SetWindowTextW(save_, i18n::text(L"&Save", L"保存(&S)"));
+    SetWindowTextW(cancel_, i18n::text(L"Cancel", L"取消"));
+    const bool failed = apply_failed_;
+    update_draft();
+    if (failed) {
+        SetWindowTextW(error_, i18n::text(L"Could not save the shortcut. Please try again.", L"无法保存快捷键，请重试。"));
+        apply_failed_ = true;
+    }
+    layout();
 }
 void HotkeyWindow::update_fonts() {
     LOGFONTW description{};
@@ -142,6 +162,7 @@ void HotkeyWindow::layout() {
     InvalidateRect(window_, nullptr, FALSE);
 }
 void HotkeyWindow::update_draft() {
+    apply_failed_ = false;
     std::wstring caption;
     if (draft_.key) {
         caption = hotkey::name(draft_);
@@ -149,7 +170,7 @@ void HotkeyWindow::update_draft() {
             if (draft_.key >= VK_F1 && draft_.key <= VK_F24) caption = L"F" + std::to_wstring(draft_.key - VK_F1 + 1);
             else if ((draft_.key >= 'A' && draft_.key <= 'Z') || (draft_.key >= '0' && draft_.key <= '9'))
                 caption.assign(1, static_cast<wchar_t>(draft_.key));
-            else caption = L"请重新按下组合键";
+            else caption = i18n::text(L"Press a shortcut again", L"请重新按下组合键");
         }
     }
     else {
@@ -162,8 +183,8 @@ void HotkeyWindow::update_draft() {
     SetWindowTextW(recorder_, caption.c_str());
     const bool valid = hotkey::valid(draft_);
     EnableWindow(save_, valid);
-    SetWindowTextW(error_, valid ? L"" : draft_.key == VK_F12 ? L"F12 为系统保留键，请换一个组合。" :
-        L"普通键须含 Ctrl、Alt 或 Win，可叠加 Shift；也可使用 F1–F24（F12 除外）。");
+    SetWindowTextW(error_, valid ? L"" : draft_.key == VK_F12 ? i18n::text(L"F12 is reserved by Windows. Choose another shortcut.", L"F12 为系统保留键，请换一个组合。") :
+        i18n::text(L"Use Ctrl, Alt, or Win with a key; Shift is optional.\r\nYou can also use F1–F24, except F12.", L"普通键须含 Ctrl、Alt 或 Win，可叠加 Shift；也可使用 F1–F24（F12 除外）。"));
 }
 void HotkeyWindow::record(UINT key, bool down) {
     if (modifier_key(key)) {
@@ -185,7 +206,8 @@ void HotkeyWindow::save() {
     if (!hotkey::valid(draft_)) return;
     std::wstring error;
     if (!apply_ || !apply_(draft_, error)) {
-        SetWindowTextW(error_, error.empty() ? L"无法保存快捷键，请重试。" : error.c_str());
+        apply_failed_ = true;
+        SetWindowTextW(error_, error.empty() ? i18n::text(L"Could not save the shortcut. Please try again.", L"无法保存快捷键，请重试。") : error.c_str());
         return;
     }
     dismiss();

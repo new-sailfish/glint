@@ -1,3 +1,4 @@
+#include "language.hpp"
 #include "extension_identity.hpp"
 
 #include <windows.h>
@@ -15,7 +16,7 @@ std::wstring legacy_unpacked_id(const std::filesystem::path& directory, std::wst
     error.clear();
     auto text = directory.native();
     if (text.empty() || text.find(L'\0') != std::wstring::npos || !directory.is_absolute()) {
-        error = L"扩展目录必须是完整的绝对路径，且不能包含空字符。";
+        error = i18n::text(L"The extension folder must be an absolute path without null characters.", L"扩展目录必须是完整的绝对路径，且不能包含空字符。");
         return {};
     }
 
@@ -29,7 +30,7 @@ std::wstring legacy_unpacked_id(const std::filesystem::path& directory, std::wst
     static_assert(sizeof(wchar_t) == 2 && std::endian::native == std::endian::little,
                   "Chromium's Windows path identity hashes UTF-16LE code units");
     if (text.size() > (std::numeric_limits<ULONG>::max)() / sizeof(wchar_t)) {
-        error = L"扩展目录路径过长，无法计算兼容身份。";
+        error = i18n::text(L"The extension path is too long to calculate its compatibility identity.", L"扩展目录路径过长，无法计算兼容身份。");
         return {};
     }
 
@@ -43,8 +44,8 @@ std::wstring legacy_unpacked_id(const std::filesystem::path& directory, std::wst
     }
     if (algorithm) BCryptCloseAlgorithmProvider(algorithm, 0);
     if (status < 0) {
-        error = L"无法计算扩展路径的 SHA-256 身份（Windows NTSTATUS " +
-            std::to_wstring(static_cast<unsigned long>(status)) + L"）。";
+        error = i18n::text(L"Could not calculate the extension path SHA-256 identity (Windows NTSTATUS ", L"无法计算扩展路径的 SHA-256 身份（Windows NTSTATUS ") +
+            std::to_wstring(static_cast<unsigned long>(status)) + i18n::text(L").", L"）。");
         return {};
     }
 

@@ -1,3 +1,4 @@
+#include "language.hpp"
 #include "browser_launch.hpp"
 
 #include <windows.h>
@@ -74,7 +75,7 @@ std::uint32_t launch_process(const std::filesystem::path& executable, const std:
 std::wstring system_error(std::uint32_t code) {
     wchar_t* text = nullptr;
     const DWORD count = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-        FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, code, 0, reinterpret_cast<wchar_t*>(&text), 0, nullptr);
+        FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, code, i18n::message_language(), reinterpret_cast<wchar_t*>(&text), 0, nullptr);
     std::wstring result = count ? std::wstring(text, count) : std::wstring{};
     if (text) LocalFree(text);
     while (!result.empty() && (result.back() == L'\r' || result.back() == L'\n' || result.back() == L' ')) result.pop_back();
@@ -138,16 +139,16 @@ bool open_extensions(Browser browser, std::wstring& error, const SearchSources& 
     error.clear();
     const auto executable = find_executable(browser, sources);
     if (executable.empty()) {
-        error = L"未找到 " + std::wstring(browser_name(browser)) +
-            L"。请确认已安装，也可手动启动该浏览器，在地址栏粘贴：\r\n" + extension_page(browser);
+        error = i18n::text(L"Could not find ", L"未找到 ") + std::wstring(browser_name(browser)) +
+            i18n::text(L". Check that it is installed, or open it manually and paste this address:\r\n", L"。请确认已安装，也可手动启动该浏览器，在地址栏粘贴：\r\n") + extension_page(browser);
         return false;
     }
     const auto code = launch(executable, command_line(executable, browser));
     if (code == ERROR_SUCCESS) return true;
-    error = L"无法打开 " + std::wstring(browser_name(browser)) + L"（Windows 错误 " + std::to_wstring(code);
+    error = i18n::text(L"Could not open ", L"无法打开 ") + std::wstring(browser_name(browser)) + i18n::text(L" (Windows error ", L"（Windows 错误 ") + std::to_wstring(code);
     const auto description = system_error(code);
-    if (!description.empty()) error += L"：" + description;
-    error += L"）。\r\n请手动启动该浏览器，在地址栏粘贴：\r\n" + std::wstring(extension_page(browser));
+    if (!description.empty()) error += i18n::text(L": ", L"：") + description;
+    error += i18n::text(L").\r\nOpen the browser manually and paste this address:\r\n", L"）。\r\n请手动启动该浏览器，在地址栏粘贴：\r\n") + std::wstring(extension_page(browser));
     return false;
 }
 

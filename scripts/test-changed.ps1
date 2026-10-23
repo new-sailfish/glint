@@ -53,6 +53,27 @@ $maxMappedTargets = 4
 # shared by several targets intentionally selects all of them until its fan-out
 # reaches the threshold below, where core and bridge smoke checks are used.
 $testByFile = @{
+  'tests/test_update_schedule.cpp' = @('glint_update_schedule')
+  'tests/test_update_feed.cpp' = @('glint_update_feed')
+  'tests/test_update_install.cpp' = @('glint_update_install')
+  'tests/test_update_process.cpp' = @('glint_update_process')
+  'tests/update_process_fixture.cpp' = @('glint_update_process')
+  'tests/update_process_fixture.rc.in' = @('glint_update_process')
+  'tests/test_update_controller.cpp' = @('glint_update_controller')
+  'tests/test_update_window.cpp' = @('glint_update_window')
+  'src/update_schedule.hpp' = @('glint_update_schedule', 'glint_update_controller')
+  'src/update_feed.cpp' = @('glint_update_feed', 'glint_update_install', 'glint_update_process')
+  'src/update_feed.hpp' = @('glint_update_feed', 'glint_update_install', 'glint_update_process', 'glint_update_controller')
+  'src/update_install.cpp' = @('glint_update_install', 'glint_update_controller', 'glint_update_process')
+  'src/update_install.hpp' = @('glint_update_install', 'glint_update_controller', 'glint_update_process')
+  'src/update_controller.cpp' = @('glint_update_controller', 'glint_update_schedule')
+  'src/update_controller.hpp' = @('glint_update_controller', 'glint_update_schedule', 'glint_update_window')
+  'src/update_window.cpp' = @('glint_update_window')
+  'src/update_window.hpp' = @('glint_update_window')
+  'src/update_types.hpp' = @('glint_update_feed', 'glint_update_install', 'glint_update_controller', 'glint_update_window')
+  'tests/test_language.cpp' = @('glint_language')
+  'src/language.hpp' = @('glint_language', 'glint_connection_overview', 'glint_setup_window', 'glint_hotkey_window')
+  'src/language_sync.hpp' = @('glint_language', 'glint_native_host')
   'tests/test_core.cpp' = @('glint_core')
   'tests/test_setup_progress.cpp' = @('glint_setup_progress')
   'tests/test_connection_overview.cpp' = @('glint_connection_overview')
@@ -208,7 +229,9 @@ foreach ($file in $changedFiles) {
   if ($normalized -in @(
       'extension/manifest.json', 'extension/background.js', 'extension/background-core.js',
       'extension/options.html', 'extension/options.js', 'extension/icon-16.png',
-      'extension/icon-32.png', 'extension/icon-48.png', 'extension/icon-128.png')) {
+      'extension/icon-32.png', 'extension/icon-48.png', 'extension/icon-128.png',
+      'extension/_locales/en/messages.json', 'extension/_locales/zh_CN/messages.json',
+      'extension/_locales/zh_TW/messages.json')) {
     Add-Selection $selectedCTest 'glint_extension_bundle' "embedded extension resource $normalized"
   }
 

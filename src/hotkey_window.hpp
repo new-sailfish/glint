@@ -17,6 +17,7 @@ public:
     HotkeyWindow(const HotkeyWindow&) = delete;
     HotkeyWindow& operator=(const HotkeyWindow&) = delete;
     void show(hotkey::Binding current);
+    void refresh_language();
     bool translate(MSG& message);
     void record_registered(hotkey::Binding binding);
     [[nodiscard]] bool visible() const;
@@ -29,7 +30,7 @@ private:
     UINT dpi_ = 96;
     hotkey::Binding draft_{};
     hotkey::Binding before_modifiers_{};
-    bool recording_modifiers_ = false;
+    bool recording_modifiers_ = false, apply_failed_ = false;
     Apply apply_;
     static LRESULT CALLBACK window_proc(HWND, UINT, WPARAM, LPARAM);
     bool create();
