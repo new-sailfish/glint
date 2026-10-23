@@ -30,6 +30,7 @@
 
 #include <atomic>
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <functional>
 #include <iterator>
@@ -935,6 +936,9 @@ private:
         const std::string request = std::to_string(request_counter_++);
         const Json message = Json::Object{{"type", "activate"}, {"version", static_cast<int>(kProtocolVersion)},
             {"requestId", request}, {"tabId", tab.key.tab_id}, {"windowId", tab.window_id}};
+        const auto accessed_at = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        index_.track_activation(tab.key, request, accessed_at);
         // Only the foreground input recipient can delegate this permission.
         // Do it before hiding Glint or handing the request to the pipe worker.
         // Failure is not conclusive: the browser may already own permission;
@@ -945,6 +949,8 @@ private:
         // browser to raise the target, or the fallback can cover it again.
         hide_search();
         if (!pipe_.send(tab.key.connection_id, message.dump())) {
+            index_.apply(tab.key.connection_id, Json::Object{{"type", "activate_result"},
+                {"version", static_cast<int>(kProtocolVersion)}, {"requestId", request}, {"ok", false}});
             show_search(false);
             MessageBoxW(window_, i18n::text(L"Could not send the switch request. Please try again.", L"暂时无法发送切换请求，请稍后重试。"), L"Glint", MB_OK | MB_ICONWARNING);
             drain_events();

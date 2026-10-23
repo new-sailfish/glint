@@ -298,6 +298,59 @@ struct SearchWindowTestAccess {
         require_search(GetFocus() == app.edit_, "a new search invocation is ready for immediate typing");
     }
 
+    static void check_activated_targets_return_as_recent_cards() {
+        SearchWindowTestAccess test;
+        auto& app = test.app;
+        const auto verify_cards = [&app](const std::vector<std::int64_t>& expected, const char* message) {
+            require_search(ListView_GetView(app.list_) == LV_VIEW_TILE &&
+                ListView_GetItemCount(app.list_) == static_cast<int>(expected.size()) &&
+                app.rows_.size() == expected.size(), message);
+            for (std::size_t i = 0; i < expected.size(); ++i)
+                require_search(app.rows_[i].key.tab_id == expected[i], message);
+            wchar_t title[256]{};
+            ListView_GetItemText(app.list_, 0, 0, title, static_cast<int>(std::size(title)));
+            require_search(std::wstring_view(title) == app.rows_.front().title,
+                "the first native card displays the reordered target title");
+            require_search(ListView_GetNextItem(app.list_, -1, LVNI_SELECTED) == 0 && GetFocus() == app.edit_,
+                "reopening after activation selects the newest card and retains search input focus");
+        };
+        const auto activate_and_reopen = [&app](const std::string& request, std::int64_t accessed_at) {
+            const int selected = ListView_GetNextItem(app.list_, -1, LVNI_SELECTED);
+            require_search(selected >= 0 && static_cast<std::size_t>(selected) < app.rows_.size(),
+                "prepare a selected target for activation confirmation");
+            const auto key = app.rows_[static_cast<std::size_t>(selected)].key;
+            require_search(app.index_.track_activation(key, request, accessed_at),
+                "track the selected browser target while awaiting activation confirmation");
+            app.hide_search();
+            app.receive(key.connection_id, Json(Json::Object{{"type", "activate_result"}, {"version", 1},
+                {"requestId", request}, {"ok", true}}).dump());
+            app.drain_events();
+            app.show_search();
+        };
+
+        verify_cards({1, 2, 3, 4, 5, 6}, "prepare six recent cards in descending visit order");
+        ListView_SetItemState(app.list_, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+        ListView_SetItemState(app.list_, 4, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+        activate_and_reopen("recent-card", 1730000002000);
+        verify_cards({5, 1, 2, 3, 4, 6},
+            "activating the third card in the first column moves it to the first recent position");
+
+        app.receive(11, Json(Json::Object{{"type", "upsert"}, {"version", 1}, {"tab", Json::Object{
+            {"tabId", 5}, {"windowId", 7}, {"index", 4}, {"title", "Browser tab guide"},
+            {"url", "https://example.test/work/5"}, {"active", true}, {"pinned", false},
+            {"lastAccessed", std::int64_t{1730000000600}}}}}).dump());
+        app.drain_events();
+        verify_cards({5, 1, 2, 3, 4, 6},
+            "an older browser event cannot undo a confirmed card activation");
+
+        SetWindowTextW(app.edit_, L"Issue tracker");
+        require_search(ListView_GetView(app.list_) == LV_VIEW_DETAILS && ListView_GetItemCount(app.list_) == 1 &&
+            app.rows_.front().key.tab_id == 7, "search reaches an open tab outside the six recent cards");
+        activate_and_reopen("searched-tab", 1730000003000);
+        verify_cards({7, 5, 1, 2, 3, 4},
+            "activating a search result outside the recent six inserts it first and evicts the oldest card");
+    }
+
     static void check_empty_connections() {
         SearchWindowTestAccess test(false);
         auto& app = test.app;
@@ -329,6 +382,7 @@ int wmain(int argc, wchar_t** argv) {
         glint::SearchWindowTestAccess::check_connections(screenshots);
         glint::SearchWindowTestAccess::check_query_modes(screenshots);
         glint::SearchWindowTestAccess::check_reopen_and_failure_recovery();
+        glint::SearchWindowTestAccess::check_activated_targets_return_as_recent_cards();
         glint::SearchWindowTestAccess::check_dpi_and_rendering(screenshots);
         glint::SearchWindowTestAccess::check_empty_connections();
         std::cout << "Search window integration checks passed\n";

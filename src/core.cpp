@@ -447,9 +447,15 @@ bool TabIndex::apply(ConnectionId connection_id, const Json& message) {
         try {
             for (const auto& item : tabs->as_array()) {
                 Tab tab = parse_tab(item, connection_id, state.info);
+                const auto existing = state.tabs.find(tab.key.tab_id);
+                if (existing != state.tabs.end())
+                    tab.last_accessed = std::max(tab.last_accessed, existing->second.last_accessed);
                 if (!replacement.emplace(tab.key.tab_id, std::move(tab)).second) return false;
             }
         } catch (const ProtocolError&) { return false; }
+        std::erase_if(state.activations, [&replacement](const auto& pending) {
+            return !replacement.contains(pending.second.tab_id);
+        });
         state.tabs = std::move(replacement); state.info.synchronized = true; state.info.tab_count = state.tabs.size(); return true;
     }
     if (!state.info.synchronized) return false;
@@ -458,19 +464,55 @@ bool TabIndex::apply(ConnectionId connection_id, const Json& message) {
             const Json* item = field(message, "tab");
             if (!item) item = &message;
             Tab tab = parse_tab(*item, connection_id, state.info);
+            const auto existing = state.tabs.find(tab.key.tab_id);
+            if (existing != state.tabs.end())
+                tab.last_accessed = std::max(tab.last_accessed, existing->second.last_accessed);
             state.tabs[tab.key.tab_id] = std::move(tab); state.info.tab_count = state.tabs.size(); return true;
         }
         if (type == "remove") {
             const auto tab_id = integer_field(message, "tabId");
+            std::erase_if(state.activations, [tab_id](const auto& pending) {
+                return pending.second.tab_id == tab_id;
+            });
             state.tabs.erase(tab_id); state.info.tab_count = state.tabs.size(); return true;
         }
-        if (type == "activate_result") return true;
+        if (type == "activate_result") {
+            const auto request_id = string_field(message, "requestId");
+            const auto* ok = field(message, "ok");
+            if (!ok || !ok->is_bool()) return false;
+            const auto pending = state.activations.find(request_id);
+            if (pending == state.activations.end()) return true;
+            if (ok->as_bool()) {
+                const auto tab = state.tabs.find(pending->second.tab_id);
+                if (tab != state.tabs.end())
+                    tab->second.last_accessed = std::max(tab->second.last_accessed, pending->second.accessed_at);
+            }
+            state.activations.erase(pending);
+            return true;
+        }
     } catch (const ProtocolError&) { return false; }
     return false;
 }
 
 bool TabIndex::disconnect(ConnectionId connection_id) {
     std::lock_guard lock(mutex_); return states_.erase(connection_id) != 0;
+}
+
+bool TabIndex::track_activation(TabKey key, std::string request_id, std::int64_t accessed_at) {
+    if (key.source != TabSource::Browser || request_id.empty() || accessed_at <= 0) return false;
+    std::lock_guard lock(mutex_);
+    const auto state = states_.find(key.connection_id);
+    if (state == states_.end() || !state->second.tabs.contains(key.tab_id)) return false;
+    auto& pending = state->second.activations;
+    // Bound outstanding requests even if a connected extension stops replying.
+    if (pending.size() >= 64) {
+        const auto oldest = std::min_element(pending.begin(), pending.end(), [](const auto& left, const auto& right) {
+            return left.second.accessed_at < right.second.accessed_at;
+        });
+        pending.erase(oldest);
+    }
+    pending.insert_or_assign(std::move(request_id), State::Activation{key.tab_id, accessed_at});
+    return true;
 }
 
 std::vector<Tab> TabIndex::search(std::wstring_view query, std::size_t limit) const {

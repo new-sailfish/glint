@@ -497,6 +497,11 @@
         const currentTab = await this.api.tabs.get(tabId);
         if (epoch !== this.connectionEpoch || !this.desktopConnected) return;
         if (!currentTab.active || currentTab.windowId !== windowId) throw failure('tabChanged', 'activation_superseded');
+        // Already-active tabs may not emit another browser activation event.
+        this.rememberAccess(currentTab.id, this.now());
+        const normalized = this.normalizeCurrentTab(currentTab);
+        this.index.set(normalized.tabId, normalized);
+        this.send({type: 'upsert', tab: normalized}, epoch);
         this.send({type: 'activate_result', requestId, ok: true}, epoch);
       } catch (error) {
         this.send({type: 'activate_result', requestId, ok: false, error: String(error && error.message || error),

@@ -144,6 +144,9 @@ class TabIndex {
 public:
     bool apply(ConnectionId connection_id, const Json& message);
     bool disconnect(ConnectionId connection_id);
+    // Call before sending a browser activation. Only its matching successful
+    // reply records the visit, including when an older extension omits recency.
+    bool track_activation(TabKey key, std::string request_id, std::int64_t accessed_at);
     std::vector<Tab> search(std::wstring_view query, std::size_t limit = 1000) const;
     std::vector<ConnectionInfo> connections() const;
     std::size_t connection_count() const;
@@ -152,8 +155,13 @@ public:
 
 private:
     struct State {
+        struct Activation {
+            std::int64_t tab_id;
+            std::int64_t accessed_at;
+        };
         ConnectionInfo info;
         std::map<std::int64_t, Tab> tabs;
+        std::map<std::string, Activation> activations;
     };
     mutable std::mutex mutex_;
     std::map<ConnectionId, State> states_;

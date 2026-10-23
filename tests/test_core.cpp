@@ -78,5 +78,59 @@ int main() {
         assert(index.apply(11, Json::Object{{"type", "upsert"}, {"version", 1}, {"tab", recent}}));
         assert(index.search(L"Recent")[0].last_accessed == 1730000000999);
     }
+    {
+        glint::TabIndex index;
+        assert(index.apply(11, hello("Chrome", "Default")));
+        assert(index.apply(22, hello("Edge", "Work")));
+        const Json snapshot = Json::Object{{"type", "snapshot"}, {"version", 1},
+            {"tabs", Json::Array{tab(1, "First", "https://first.test"), tab(2, "Second", "https://second.test")}}};
+        assert(index.apply(11, snapshot));
+        assert(index.apply(22, snapshot));
+        const auto result = [](const char* request, bool ok) {
+            return Json(Json::Object{{"type", "activate_result"}, {"version", 1}, {"requestId", request}, {"ok", ok}});
+        };
+        const glint::TabKey second{11, 2};
+        assert(index.track_activation(second, "card", 2000));
+        // Older extensions send only this acknowledgement, with no access-time upsert.
+        assert(index.apply(11, result("card", true)));
+        assert(index.search(L"Second")[0].last_accessed == 2000);
+        assert(index.search(L"Second")[1].last_accessed == 0);
+        assert(index.apply(11, Json::Object{{"type", "upsert"}, {"version", 1},
+            {"tab", tab(2, "Second renamed", "https://second.test")}}));
+        assert(index.search(L"Second")[0].last_accessed == 2000);
+        assert(index.apply(11, snapshot));
+        assert(index.search(L"Second")[0].last_accessed == 2000);
+
+        assert(index.track_activation(second, "next", 3000));
+        assert(index.apply(22, result("next", true))); // Wrong connection cannot confirm it.
+        assert(index.apply(11, result("unknown", true)));
+        assert(index.search(L"Second")[0].last_accessed == 2000);
+        assert(index.apply(11, result("next", false)));
+        assert(index.apply(11, result("next", true))); // Failure consumed the request.
+        assert(index.search(L"Second")[0].last_accessed == 2000);
+
+        assert(index.track_activation(second, "older", 2500));
+        assert(index.track_activation(second, "newer", 4000));
+        assert(index.apply(11, result("newer", true)));
+        assert(index.apply(11, result("older", true)));
+        assert(index.search(L"Second")[0].last_accessed == 4000);
+        auto visited = tab(2, "Second", "https://second.test");
+        visited["lastAccessed"] = 5000;
+        assert(index.apply(11, Json::Object{{"type", "upsert"}, {"version", 1}, {"tab", visited}}));
+        assert(index.search(L"Second")[0].last_accessed == 5000);
+
+        assert(index.track_activation(second, "closed", 6000));
+        assert(index.apply(11, Json::Object{{"type", "remove"}, {"version", 1}, {"tabId", 2}}));
+        assert(index.apply(11, snapshot));
+        assert(index.apply(11, result("closed", true)));
+        assert(index.search(L"Second")[0].last_accessed == 0);
+        assert(index.track_activation(second, "session", 7000));
+        assert(index.apply(11, hello("Chrome", "Replacement session")));
+        assert(index.apply(11, snapshot));
+        assert(index.apply(11, result("session", true)));
+        assert(index.search(L"Second")[0].last_accessed == 0);
+        assert(!index.track_activation({11, 99}, "missing", 8000));
+        assert(!index.track_activation({11, 2, glint::TabSource::Window}, "native", 8000));
+    }
     std::cout << "core tests passed\n";
 }

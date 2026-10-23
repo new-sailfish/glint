@@ -271,7 +271,64 @@ test('activate focuses window, restores minimized state, activates tab and repor
   const bridge = new TabBridge({api, profileId:'p', browser:'edge'}); const port = portFake(); readyBridge(bridge, port);
   await bridge.handleMessage({version:1,type:'activate',requestId:'r',tabId:2,windowId:10});
   assert.deepEqual([focused, restored, activated], [true,'normal',[2,true]]);
-  assert.deepEqual(port.messages[0], {version:1,desktopGeneration:1,type:'activate_result',requestId:'r',ok:true});
+  assert.deepEqual(port.messages.at(-1), {version:1,desktopGeneration:1,type:'activate_result',requestId:'r',ok:true});
+});
+
+test('successful Glint activation publishes recency without browser events for cards and search results', async () => {
+  const {api, tabs} = fakeApi();
+  tabs.splice(0, tabs.length, ...Array.from({length: 8}, (_, index) => ({
+    id: index + 1, windowId: 10, title: `Tab ${index + 1}`, active: index === 0,
+    lastAccessed: 8000 - index * 1000,
+  })));
+  let now = 9000;
+  const bridge = new TabBridge({api, now: () => now, wait: async () => {}});
+  const port = portFake(); readyBridge(bridge, port); bridge.attachListeners();
+  await bridge.syncSnapshot();
+  const recentIds = () => [...bridge.index.values()]
+    .sort((left, right) => right.lastAccessed - left.lastAccessed)
+    .slice(0, 6).map(tab => tab.tabId);
+  assert.deepEqual(recentIds(), [1, 2, 3, 4, 5, 6]);
+  for (const tabId of [5, 8]) {
+    port.messages.length = 0;
+    await bridge.handleMessage({version: 1, type: 'activate', requestId: `recent-${tabId}`, tabId, windowId: 10});
+    assert.deepEqual(port.messages.map(message => message.type), ['upsert', 'activate_result'],
+      'successful activation must publish its visit before acknowledging success');
+    assert.equal(port.messages[0].tab.tabId, tabId);
+    assert.equal(port.messages[0].tab.lastAccessed, now);
+    assert.equal(recentIds()[0], tabId, 'the activated target must lead the next recent-card view');
+    now += 1000;
+  }
+  assert.deepEqual(recentIds(), [8, 5, 1, 2, 3, 4]);
+});
+
+test('failed Glint activation does not manufacture an access time or upsert', async () => {
+  for (const failure of ['focus-denied', 'tab-superseded']) {
+    const {api} = fakeApi();
+    if (failure === 'focus-denied') api.windows.get = async id => ({id, state: 'normal', focused: false});
+    else api.tabs.get = async id => ({id, windowId: 10, active: false});
+    const bridge = new TabBridge({api, now: () => 9000, wait: async () => {}});
+    const port = portFake(); readyBridge(bridge, port);
+    await bridge.handleMessage({version: 1, type: 'activate', requestId: failure, tabId: 2, windowId: 10});
+    assert.deepEqual(port.messages.map(message => message.type), ['activate_result']);
+    assert.equal(port.messages[0].ok, false);
+    assert.equal(bridge.accessTimes.has(2), false);
+  }
+});
+
+test('an obsolete activation cannot publish a visit after final tab validation completes', async () => {
+  const {api} = fakeApi();
+  let finishRead;
+  api.tabs.get = () => new Promise(resolve => { finishRead = resolve; });
+  const bridge = new TabBridge({api, now: () => 9000, wait: async () => {}});
+  const port = portFake(); readyBridge(bridge, port);
+  const activation = bridge.handleMessage({version: 1, type: 'activate', requestId: 'old', tabId: 2, windowId: 10});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(typeof finishRead, 'function');
+  bridge.setDesktopState(false);
+  finishRead({id: 2, windowId: 10, active: true});
+  await activation;
+  assert.deepEqual(port.messages, []);
+  assert.equal(bridge.accessTimes.has(2), false);
 });
 
 test('a resolved focus call that leaves the browser behind reports failure', async () => {
