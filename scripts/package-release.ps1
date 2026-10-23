@@ -149,7 +149,7 @@ foreach ($name in @('docs/design.md', 'docs/protocol.md', 'docs/branding.md',
     'docs/assets/setup-connected.png', 'docs/assets/hotkey.png',
     'docs/assets/search-en.png', 'docs/assets/setup-browser-en.png',
     'docs/assets/setup-load-en.png', 'docs/assets/setup-connected-en.png', 'docs/assets/hotkey-en.png',
-    'docs/assets/architecture.svg')) {
+    'docs/assets/architecture.svg', 'docs/assets/architecture-en.svg')) {
   $releaseFiles[$name] = Join-Path $repositoryDirectory $name
 }
 # Browser profiles may already load this stable unpacked-extension path.

@@ -109,6 +109,7 @@ function New-Fixture([switch]$NoGit) {
       'docs/assets/setup-connected-en.png' = 'English connected screenshot'
       'docs/assets/hotkey-en.png' = 'English hotkey screenshot'
       'docs/assets/architecture.svg' = '<svg>architecture</svg>'
+      'docs/assets/architecture-en.svg' = '<svg>English architecture</svg>'
       'assets/logo.svg' = '<svg />'
       'extension/manifest.json' = '{"manifest_version":3}'
       'extension/background.js' = 'background'
@@ -212,7 +213,7 @@ try {
       'docs/assets/setup-connected.png', 'docs/assets/hotkey.png',
       'docs/assets/search-en.png', 'docs/assets/setup-browser-en.png',
       'docs/assets/setup-load-en.png', 'docs/assets/setup-connected-en.png', 'docs/assets/hotkey-en.png',
-      'docs/assets/architecture.svg')
+      'docs/assets/architecture.svg', 'docs/assets/architecture-en.svg')
     $internalDocuments = @('docs/unknown-draft.md', 'docs/superpowers/plans/private-plan.md',
       'docs/superpowers/specs/private-spec.md', 'docs/validation-2026-10-22.md', 'docs/assets/screenshot.png')
     $manifestPath = Join-Path $fixture 'dist/release-manifest.json'

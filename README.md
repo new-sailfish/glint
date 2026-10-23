@@ -133,7 +133,7 @@ Glint uses **C++20 and Win32** for the desktop application and a shared
 VS 2022 x64 developer environment, CMake 3.21+ and Node.js 22+. The extension
 uses Node's built-in test runner and needs no package installation.
 
-![Local architecture: browser extensions communicate through GlintBridge with the desktop search window](docs/assets/architecture.svg)
+![Local architecture: browser extensions communicate through GlintBridge with the desktop search window](docs/assets/architecture-en.svg)
 
 Each browser profile runs the same extension. A browser-managed
 `GlintBridge.exe` connects it to the desktop application through Native

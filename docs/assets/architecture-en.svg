@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="620" viewBox="0 0 1280 620" xml:lang="en" role="img" aria-labelledby="title desc">
+  <title id="title">Glint local architecture</title>
+  <desc id="desc">Each Chrome or Edge profile runs a Glint extension. The browser starts a separate GlintBridge.exe process for each extension. Native Messaging connects the extension to its bridge, which connects to Glint.exe through a named pipe for the current Windows user. Tab snapshots and updates flow to the in-memory desktop index; activation requests return to the browser. All components run locally.</desc>
+  <defs>
+    <g id="glint-mark"><rect width="100" height="100" rx="24" fill="#2c61bd"/><path d="M50 8 60.8 39.2 92 50 60.8 60.8 50 92 39.2 60.8 8 50 39.2 39.2Z" fill="#fff"/><path d="m50 27.5 6.2 16.3 16.3 6.2-16.3 6.2-6.2 16.3-6.2-16.3-16.3-6.2 16.3-6.2Z" fill="#dce8ff"/><circle cx="75" cy="25" r="7" fill="#a9c6ff"/></g>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="m1 1 7 4-7 4" fill="none" stroke="#2c61bd" stroke-width="1.8" stroke-linejoin="round"/></marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="m1 1 7 4-7 4" fill="none" stroke="#7b91b1" stroke-width="1.8" stroke-linejoin="round"/></marker>
+  </defs>
+  <g font-family="Segoe UI, Microsoft YaHei, sans-serif">
+    <rect width="1280" height="620" rx="12" fill="#f5f8fd"/>
+    <text x="40" y="49" font-size="24" font-weight="600" fill="#223043">Glint local architecture</text>
+    <text x="40" y="79" font-size="14" fill="#53657b">Connect each browser profile and search from one desktop window</text>
+    <rect x="1070" y="31" width="170" height="32" rx="16" fill="#e4ecfa"/><circle cx="1088" cy="47" r="4" fill="#2c61bd"/><text x="1101" y="52" font-size="12" fill="#2c61bd">Current Windows user</text>
+    <path d="M40 103h1200" stroke="#d7e1ec"/>
+
+    <text x="40" y="139" font-size="12" font-weight="600" letter-spacing="1.5" fill="#53657b">Browser profiles</text>
+    <text x="472" y="139" font-size="12" font-weight="600" letter-spacing="1.5" fill="#53657b">Browser-managed bridges</text>
+    <text x="931" y="139" font-size="12" font-weight="600" letter-spacing="1.5" fill="#53657b">Desktop search application</text>
+
+    <g transform="translate(40 163)">
+      <rect width="278" height="97" rx="6" fill="#fff" stroke="#cbd8e9"/>
+      <path d="M0 37h278" stroke="#e0e7f1"/>
+      <text x="18" y="24" font-size="13" font-weight="600" fill="#223043">Chrome · Work</text>
+      <use href="#glint-mark" transform="translate(18 52) scale(.28)"/>
+      <text x="57" y="71" font-size="14" fill="#223043">Glint extension</text>
+      <text x="198" y="71" font-size="11" fill="#69809f">Tabs</text>
+    </g>
+    <g transform="translate(40 286)">
+      <rect width="278" height="97" rx="6" fill="#fff" stroke="#cbd8e9"/>
+      <path d="M0 37h278" stroke="#e0e7f1"/>
+      <text x="18" y="24" font-size="13" font-weight="600" fill="#223043">Chrome · Personal</text>
+      <use href="#glint-mark" transform="translate(18 52) scale(.28)"/>
+      <text x="57" y="71" font-size="14" fill="#223043">Glint extension</text>
+      <text x="198" y="71" font-size="11" fill="#69809f">Tabs</text>
+    </g>
+    <g transform="translate(40 409)">
+      <rect width="278" height="97" rx="6" fill="#fff" stroke="#cbd8e9"/>
+      <path d="M0 37h278" stroke="#e0e7f1"/>
+      <text x="18" y="24" font-size="13" font-weight="600" fill="#223043">Edge · Work</text>
+      <use href="#glint-mark" transform="translate(18 52) scale(.28)"/>
+      <text x="57" y="71" font-size="14" fill="#223043">Glint extension</text>
+      <text x="198" y="71" font-size="11" fill="#69809f">Tabs</text>
+    </g>
+
+    <g fill="none" stroke="#2c61bd" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)"><path d="M332 228H458"/><path d="M332 351H458"/><path d="M332 474H458"/></g>
+    <g font-size="11" text-anchor="middle" fill="#53657b"><text x="395" y="206">Native Messaging</text><text x="395" y="329">Native Messaging</text><text x="395" y="452">Native Messaging</text></g>
+
+    <g transform="translate(472 163)">
+      <rect width="258" height="97" rx="6" fill="#eaf1ff" stroke="#bdd0ef"/>
+      <text x="20" y="33" font-size="17" font-weight="600" fill="#254a85">GlintBridge.exe</text>
+      <text x="20" y="61" font-size="12" fill="#536b8e">Message relay · Separate process</text>
+      <text x="20" y="81" font-size="11" fill="#69809f">For Chrome · Work</text>
+    </g>
+    <g transform="translate(472 286)">
+      <rect width="258" height="97" rx="6" fill="#eaf1ff" stroke="#bdd0ef"/>
+      <text x="20" y="33" font-size="17" font-weight="600" fill="#254a85">GlintBridge.exe</text>
+      <text x="20" y="61" font-size="12" fill="#536b8e">Message relay · Separate process</text>
+      <text x="20" y="81" font-size="11" fill="#69809f">For Chrome · Personal</text>
+    </g>
+    <g transform="translate(472 409)">
+      <rect width="258" height="97" rx="6" fill="#eaf1ff" stroke="#bdd0ef"/>
+      <text x="20" y="33" font-size="17" font-weight="600" fill="#254a85">GlintBridge.exe</text>
+      <text x="20" y="61" font-size="12" fill="#536b8e">Message relay · Separate process</text>
+      <text x="20" y="81" font-size="11" fill="#69809f">For Edge · Work</text>
+    </g>
+
+    <g fill="none" stroke="#2c61bd" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)"><path d="M744 228H916"/><path d="M744 351H916"/><path d="M744 474H916"/></g>
+    <g font-size="11" text-anchor="middle" fill="#53657b"><text x="831" y="206">Per-user named pipe</text><text x="831" y="329">Per-user named pipe</text><text x="831" y="452">Per-user named pipe</text></g>
+
+    <g transform="translate(931 163)">
+      <rect width="309" height="343" rx="7" fill="#fff" stroke="#2c61bd" stroke-width="1.5"/>
+      <path d="M7 0h295a7 7 0 0 1 7 7v63H0V7a7 7 0 0 1 7-7Z" fill="#2c61bd"/>
+      <text x="24" y="31" font-size="22" font-weight="600" fill="#fff">Glint.exe</text>
+      <text x="24" y="53" font-size="12" fill="#dce8ff">One desktop search interface</text>
+      <text x="24" y="108" font-size="15" font-weight="600" fill="#223043">In-memory tab index</text>
+      <text x="24" y="134" font-size="12" fill="#53657b">Receives snapshots and incremental updates</text>
+      <path d="M24 157h261" stroke="#d7e1ec"/>
+      <text x="24" y="191" font-size="15" font-weight="600" fill="#223043">Native search window</text>
+      <text x="24" y="217" font-size="12" fill="#53657b">Search by title or URL, then activate a tab</text>
+      <path d="M24 241h261" stroke="#d7e1ec"/>
+      <text x="24" y="276" font-size="15" font-weight="600" fill="#223043">Global hotkey and system tray</text>
+      <text x="24" y="302" font-size="12" fill="#53657b">Open search with a configurable shortcut</text>
+    </g>
+
+    <path d="M40 537h1200" stroke="#d7e1ec"/>
+    <path d="M40 571h54" stroke="#2c61bd" stroke-width="2" marker-end="url(#arrow)"/><text x="109" y="576" font-size="12" fill="#53657b">Tab snapshots and updates → desktop</text>
+    <path d="M447 571h-54" stroke="#7b91b1" stroke-width="2" marker-end="url(#arrow-muted)"/><text x="462" y="576" font-size="12" fill="#53657b">Activation requests → browser</text>
+    <text x="1240" y="576" font-size="12" fill="#53657b" text-anchor="end">Local communication · No cloud dependency</text>
+  </g>
+</svg>
