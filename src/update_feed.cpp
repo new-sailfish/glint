@@ -16,6 +16,8 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <map>
+#include <mutex>
 #include <sstream>
 #include <system_error>
 #include <utility>
@@ -30,6 +32,77 @@ constexpr std::string_view kApiRoot = "https://api.github.com/repos/new-sailfish
 constexpr std::string_view kGithubRoot = "https://github.com/new-sailfish/glint";
 constexpr std::string_view kAssetRoot = "https://release-assets.githubusercontent.com/";
 constexpr std::string_view kBinaryName = "Glint.exe";
+constexpr std::string_view kManifestName = "release-manifest.json";
+constexpr std::string_view kPagesRoot = "https://new-sailfish.github.io/glint/updates/";
+constexpr std::array<std::string_view, 4> kManifestRoots{
+    "https://raw.githubusercontent.com/new-sailfish/glint/update-feed/", kPagesRoot,
+    "https://gcore.jsdelivr.net/gh/new-sailfish/glint@update-feed/",
+    "https://testingcf.jsdelivr.net/gh/new-sailfish/glint@update-feed/"};
+constexpr std::array<std::string_view, 4> kProxyRoots{
+    "https://ghfast.top/", "https://gh-proxy.com/", "https://ghfile.geekertao.top/", "https://ghproxy.net/"};
+
+std::string origin(std::string_view url) {
+    return std::string(url.substr(0, url.find('/', 8)));
+}
+
+// Keep a limited endpoint quiet without preventing independent hosts from serving updates.
+class SourceFailures {
+  public:
+    void check(std::string_view url) const {
+        const auto found = limited_.find(origin(url));
+        if (found != limited_.end())
+            throw found->second;
+    }
+    void record(std::string_view url, const Error &error) {
+        if (error.kind == FailureKind::Cancelled || error.kind == FailureKind::Filesystem)
+            throw error;
+        if (error.kind == FailureKind::RateLimit) {
+            limited_.insert_or_assign(error.source_origin.empty() ? origin(url) : error.source_origin, error);
+            const auto delay = error.retry_after_seconds ? error.retry_after_seconds : 3600;
+            earliest_retry_ = earliest_retry_ ? std::min(earliest_retry_, delay) : delay;
+        } else {
+            if (error.kind == FailureKind::Invalid || !failure_ || failure_->kind != FailureKind::Invalid)
+                failure_ = error;
+        }
+    }
+    [[noreturn]] void raise() const {
+        if (failure_)
+            throw Error(std::string("All update sources failed. ") + failure_->what(), failure_->kind);
+        throw Error("All update sources are temporarily rate-limited. Please try again later.",
+                    FailureKind::RateLimit, earliest_retry_);
+    }
+
+  private:
+    std::map<std::string, Error> limited_;
+    std::optional<Error> failure_;
+    std::uint64_t earliest_retry_ = 0;
+};
+
+std::vector<feed::Request> manifest_sources(const std::optional<Release> &candidate) {
+    const auto suffix = candidate ? "v" + candidate->version + "/" + std::string(kManifestName)
+                                  : std::string(kManifestName);
+    const auto direct = candidate ? candidate->manifest_url
+                                 : std::string(kGithubRoot) + "/releases/latest/download/" + std::string(kManifestName);
+    std::vector<feed::Request> sources{{direct}};
+    if (candidate && !candidate->manifest_api_url.empty())
+        sources.push_back({candidate->manifest_api_url, true});
+    for (const auto root : kManifestRoots)
+        sources.push_back({std::string(root) + suffix});
+    for (const auto root : kProxyRoots)
+        sources.push_back({std::string(root) + direct});
+    return sources;
+}
+
+std::vector<feed::Request> binary_sources(const Release &release) {
+    std::vector<feed::Request> sources{{release.binary_url, false, feed::kBinaryLimit}};
+    if (!release.binary_api_url.empty())
+        sources.push_back({release.binary_api_url, true, feed::kBinaryLimit});
+    sources.push_back({std::string(kPagesRoot) + "v" + release.version + "/" + std::string(kBinaryName),
+                       false, feed::kBinaryLimit});
+    for (const auto root : kProxyRoots)
+        sources.push_back({std::string(root) + release.binary_url, false, feed::kBinaryLimit});
+    return sources;
+}
 struct Version {
     std::array<std::uint32_t, 3> values{};
 };
@@ -302,6 +375,10 @@ std::uint64_t retry_after(HINTERNET request) {
         std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
     return reset > now ? std::min<std::uint64_t>(reset - now, 86400) : 3600;
 }
+feed::SourceCooldowns &source_cooldowns() {
+    static feed::SourceCooldowns cooldowns;
+    return cooldowns;
+}
 std::string wide_to_utf8(std::wstring_view input) {
     const int size = input.empty() ? 0
                                    : WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, input.data(),
@@ -327,6 +404,7 @@ void winhttp_once(const feed::Request &request, const feed::Sink &sink, const Ca
     std::string current = request.url;
     for (int redirects = 0; redirects <= 5; ++redirects) {
         check();
+        source_cooldowns().check(current);
         const auto separator = current.find('/', 8);
         const auto host = current.substr(8, separator - 8), path = current.substr(separator);
         const std::wstring whost(host.begin(), host.end()), wpath(path.begin(), path.end());
@@ -373,8 +451,11 @@ void winhttp_once(const feed::Request &request, const feed::Sink &sink, const Ca
         }
         if (status == 429 ||
             (status == 403 && (response_header(handle, WINHTTP_QUERY_CUSTOM, L"X-RateLimit-Remaining") == L"0" ||
-                               !response_header(handle, WINHTTP_QUERY_RETRY_AFTER).empty())))
-            throw Error("update service rate limit", FailureKind::RateLimit, retry_after(handle));
+                               !response_header(handle, WINHTTP_QUERY_RETRY_AFTER).empty()))) {
+            const auto delay = retry_after(handle);
+            source_cooldowns().limit(current, delay);
+            throw Error("update service rate limit", FailureKind::RateLimit, delay, origin(current));
+        }
         if (status != 200)
             throw Error("update service returned HTTP " + std::to_string(status), FailureKind::Network);
         const auto length_text = response_header(handle, WINHTTP_QUERY_CONTENT_LENGTH);
@@ -404,6 +485,7 @@ void winhttp_once(const feed::Request &request, const feed::Sink &sink, const Ca
 }
 feed::Fetch default_fetch() {
     return [](const feed::Request &request, const feed::Sink &sink, const Cancel &cancel, const Progress &) {
+        check_cancel(cancel);
         const auto deadline = std::chrono::steady_clock::now() +
                               std::chrono::seconds(request.maximum_bytes <= feed::kMetadataLimit ? 30 : 180);
         bool delivered = false;
@@ -589,8 +671,48 @@ void verify_binary(const std::filesystem::path &path, const Release &release) {
 }
 
 namespace feed {
+SourceCooldowns::SourceCooldowns(std::function<std::int64_t()> now) : now_(std::move(now)) {
+    if (!now_)
+        now_ = [] {
+            return std::chrono::duration_cast<std::chrono::seconds>(
+                       std::chrono::steady_clock::now().time_since_epoch()).count();
+        };
+}
+void SourceCooldowns::check(std::string_view url) {
+    std::lock_guard lock(mutex_);
+    const auto found = until_.find(origin(url));
+    if (found == until_.end())
+        return;
+    const auto remaining = found->second - now_();
+    if (remaining > 0)
+        throw Error("Update source is temporarily rate-limited: " + found->first,
+                    FailureKind::RateLimit, static_cast<std::uint64_t>(remaining), found->first);
+    until_.erase(found);
+}
+void SourceCooldowns::limit(std::string_view url, std::uint64_t seconds) {
+    const auto delay = static_cast<std::int64_t>(std::min<std::uint64_t>(seconds ? seconds : 3600, 86400));
+    std::lock_guard lock(mutex_);
+    auto &until = until_[origin(url)];
+    until = std::max(until, now_() + delay);
+}
 bool newer_version(std::string_view candidate, std::string_view current) {
     return version_newer(candidate, current);
+}
+bool allowed_feed_path(std::string_view path, bool binary) {
+    if (path == kManifestName)
+        return true;
+    if (!path.starts_with('v'))
+        return false;
+    const auto slash = path.find('/');
+    if (slash == std::string_view::npos)
+        return false;
+    try {
+        parse_version(path.substr(1, slash - 1));
+    } catch (...) {
+        return false;
+    }
+    const auto name = path.substr(slash + 1);
+    return name == kManifestName || (binary && name == kBinaryName);
 }
 bool allowed_url(std::string_view url) {
     if (url.size() > 16384 ||
@@ -600,8 +722,20 @@ bool allowed_url(std::string_view url) {
         const auto path = url.substr(kAssetRoot.size());
         return !path.empty() && path.front() != '/' && path.find('#') == std::string_view::npos;
     }
-    if (url.find('@') != std::string_view::npos || url.find('?') != std::string_view::npos ||
+    if (url.find('?') != std::string_view::npos ||
         url.find('#') != std::string_view::npos || url.find('%') != std::string_view::npos)
+        return false;
+    for (const auto root : kManifestRoots) {
+        if (url.starts_with(root))
+            return allowed_feed_path(url.substr(root.size()), root == kPagesRoot);
+    }
+    for (const auto root : kProxyRoots) {
+        if (url.starts_with(root)) {
+            const auto destination = url.substr(root.size());
+            return destination.starts_with(std::string(kGithubRoot) + "/releases/") && allowed_url(destination);
+        }
+    }
+    if (url.find('@') != std::string_view::npos)
         return false;
     if (host_prefix(url, kGithubRoot, "/releases/download/v")) {
         const auto begin = kGithubRoot.size() + std::string_view("/releases/download/v").size();
@@ -619,6 +753,15 @@ bool allowed_url(std::string_view url) {
         return true;
     if (url == std::string(kApiRoot) + "/releases/latest")
         return true;
+    const auto tags = std::string(kApiRoot) + "/releases/tags/v";
+    if (url.starts_with(tags)) {
+        try {
+            parse_version(url.substr(tags.size()));
+            return true;
+        } catch (...) {
+            return false;
+        }
+    }
     if (host_prefix(url, kApiRoot, "/releases/assets/")) {
         const auto id = url.substr(kApiRoot.size() + std::string_view("/releases/assets/").size());
         return !id.empty() && std::all_of(id.begin(), id.end(), [](unsigned char c) { return std::isdigit(c) != 0; });
@@ -703,42 +846,49 @@ Release parse_manifest(std::string_view text, Release release) {
 std::optional<Release> find_release(std::string_view current_version, const Fetch &fetch, const Cancel &cancel) {
     parse_version(current_version);
     check_cancel(cancel);
-    std::string metadata;
-    try {
-        metadata = collect(fetch, {std::string(kApiRoot) + "/releases/latest", false, kMetadataLimit}, cancel);
-    } catch (const Error &api_error) {
-        if (api_error.kind != FailureKind::Network)
-            throw;
-        // Only an unavailable API enables moving metadata. The binary is still derived
-        // from the validated numeric version and never downloaded from latest/download.
-        auto release = parse_manifest(collect(
-            fetch,
-            {std::string(kGithubRoot) + "/releases/latest/download/release-manifest.json", false, kMetadataLimit},
-            cancel));
-        return newer_version(release.version, current_version) ? std::optional<Release>(std::move(release))
-                                                               : std::nullopt;
-    }
-    auto candidate = parse_latest(metadata);
-    Error last("release manifest unavailable", FailureKind::Network);
-    for (const auto &url : {candidate.manifest_url, candidate.manifest_api_url}) {
-        if (url.empty())
-            continue;
+    SourceFailures failures;
+    const auto read_manifest = [&](const Request &request, const Release &candidate) -> std::optional<Release> {
         check_cancel(cancel);
         try {
-            auto release = parse_manifest(
-                collect(fetch, {url, url == candidate.manifest_api_url, kMetadataLimit}, cancel), candidate);
-            return newer_version(release.version, current_version) ? std::optional<Release>(std::move(release))
-                                                                   : std::nullopt;
+            failures.check(request.url);
+            return parse_manifest(collect(fetch, request, cancel), candidate);
         } catch (const Error &error) {
-            if (error.kind == FailureKind::Cancelled || error.kind == FailureKind::Filesystem ||
-                error.kind == FailureKind::RateLimit)
-                throw;
-            if (last.kind != FailureKind::Invalid &&
-                (last.kind != FailureKind::RateLimit || error.kind == FailureKind::Invalid))
-                last = error;
+            failures.record(request.url, error);
+            return std::nullopt;
+        }
+    };
+    const auto selected = [&](Release release) -> std::optional<Release> {
+        return newer_version(release.version, current_version) ? std::optional<Release>(std::move(release))
+                                                               : std::nullopt;
+    };
+    const auto latest = manifest_sources(std::nullopt);
+    const auto official_count = 1 + kManifestRoots.size();
+    // Ordinary checks need only the published manifest, never the rate-limited API.
+    for (std::size_t i = 0; i < official_count; ++i) {
+        if (auto release = read_manifest(latest[i], {}))
+            return selected(std::move(*release));
+    }
+    std::optional<Release> candidate;
+    const auto api = std::string(kApiRoot) + "/releases/latest";
+    check_cancel(cancel);
+    try {
+        failures.check(api);
+        candidate = parse_latest(collect(fetch, {api}, cancel));
+    } catch (const Error &api_error) {
+        failures.record(api, api_error);
+    }
+    if (candidate) {
+        for (const auto &request : manifest_sources(candidate)) {
+            if (auto release = read_manifest(request, *candidate))
+                return selected(std::move(*release));
+        }
+    } else {
+        for (std::size_t i = official_count; i < latest.size(); ++i) {
+            if (auto release = read_manifest(latest[i], {}))
+                return selected(std::move(*release));
         }
     }
-    throw last;
+    failures.raise();
 }
 Package download_release(Release release, const std::filesystem::path &cache_root, const Fetch &fetch,
                          const Cancel &cancel, const Progress &progress) {
@@ -794,11 +944,36 @@ Package download_release(Release release, const std::filesystem::path &cache_roo
     } cleanup{attempt_directory};
     auto attempt_locks = lock_directories(attempt_directory);
     const auto part = attempt_directory / "Glint.exe.part";
-    Error last("download failed", FailureKind::Network);
-    for (const auto &url : {release.binary_url, release.binary_api_url}) {
-        if (url.empty())
-            continue;
+    SourceFailures failures;
+    auto sources = binary_sources(release);
+    const bool needs_api_asset = release.binary_api_url.empty();
+    for (std::size_t index = 0; index < sources.size(); ++index) {
         check_cancel(cancel);
+        if (index == 1 && needs_api_asset) {
+            // Manifest-first discovery normally needs no API. Look up its asset ID
+            // only if the direct EXE failed, using the chosen tag rather than latest.
+            const auto tagged = std::string(kApiRoot) + "/releases/tags/v" + release.version;
+            try {
+                failures.check(tagged);
+                const auto candidate = parse_latest(collect(fetch, {tagged}, cancel));
+                if (candidate.version != release.version || (release.size && candidate.size != release.size))
+                    invalid("backup API asset does not match the selected release");
+                if (!candidate.binary_api_url.empty()) {
+                    release.binary_api_url = candidate.binary_api_url;
+                    release.size = candidate.size;
+                    sources.insert(sources.begin() + index, {release.binary_api_url, true, kBinaryLimit});
+                }
+            } catch (const Error &error) {
+                failures.record(tagged, error);
+            }
+        }
+        auto request = sources[index];
+        try {
+            failures.check(request.url);
+        } catch (const Error &error) {
+            failures.record(request.url, error);
+            continue;
+        }
         ensure_safe_tree(part);
         std::filesystem::remove(part, ec);
         if (ec)
@@ -815,7 +990,8 @@ Package download_release(Release release, const std::filesystem::path &cache_roo
         std::uint64_t received = 0;
         try {
             const auto limit = release.size ? release.size : kBinaryLimit;
-            fetch({url, url == release.binary_api_url, limit},
+            request.maximum_bytes = limit;
+            fetch(request,
                   [&](std::span<const char> bytes) {
                       write_sink(file, received, limit, cancel, progress, bytes, release.size);
                   },
@@ -835,18 +1011,13 @@ Package download_release(Release release, const std::filesystem::path &cache_roo
             return normalized_package();
         } catch (const Error &error) {
             clean_part();
-            if (error.kind == FailureKind::Cancelled || error.kind == FailureKind::Filesystem ||
-                error.kind == FailureKind::RateLimit)
-                throw;
-            if (last.kind != FailureKind::Invalid &&
-                (last.kind != FailureKind::RateLimit || error.kind == FailureKind::Invalid))
-                last = error;
+            failures.record(request.url, error);
         } catch (...) {
             clean_part();
             throw;
         }
     }
-    throw last;
+    failures.raise();
 }
 } // namespace feed
 std::optional<Release> find_release(std::string_view current_version, const Cancel &cancel) {

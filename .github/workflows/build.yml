@@ -132,3 +132,9 @@ jobs:
             dist/Glint.exe
             Glint-win-x64.zip
             dist/release-manifest.json
+      - name: Publish verified update mirrors
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GLINT_RELEASE_VERSION: ${{ steps.reserve.outputs.version }}
+        run: .\scripts\publish-update-feed.ps1 -Version $env:GLINT_RELEASE_VERSION -Commit $env:GITHUB_SHA

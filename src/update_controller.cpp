@@ -11,6 +11,8 @@
 
 namespace glint::update {
 namespace {
+constexpr int kSourcePolicy = 2;
+
 std::wstring wide(std::string_view value) {
     if (value.empty()) return {};
     int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()), nullptr, 0);
@@ -104,6 +106,11 @@ void Controller::load() {
         schedule_.retry_at = number(value, "retryAt");
         schedule_.server_limit = number(value, "serverLimit");
         schedule_.failures = static_cast<unsigned>((std::min)(number(value, "failures"), std::int64_t{100}));
+        // Older releases treated one GitHub limit as a cooldown for every source.
+        if (number(value, "sourcePolicy") < kSourcePolicy && schedule_.server_limit) {
+            schedule_.server_limit = 0;
+            schedule_.retry_at = 0;
+        }
         // Bound future persisted times so a clock correction cannot disable updates forever.
         const auto now = services_.now();
         if (schedule_.retry_at > now + 604800) schedule_.retry_at = 0;
@@ -126,7 +133,7 @@ void Controller::load() {
     } catch (const std::exception&) { /* An invalid local record is never executable authority. */ }
 }
 void Controller::save_locked() {
-    Json value = Json::Object{{"automatic", state_.automatic}, {"lastCheck", schedule_.last_success},
+    Json value = Json::Object{{"sourcePolicy", kSourcePolicy}, {"automatic", state_.automatic}, {"lastCheck", schedule_.last_success},
         {"retryAt", schedule_.retry_at}, {"serverLimit", schedule_.server_limit}, {"failures", static_cast<int>(schedule_.failures)},
         {"blocked", blocked_version_}, {"notified", notified_version_}};
     if (package_) {
@@ -171,7 +178,8 @@ void Controller::check(bool manual) {
         if (stopped_ || state_.state == State::Ready || state_.state == State::Installing) return;
         if (!package_ && !schedule_.manual_allowed(services_.now())) {
             state_.state = State::Error;
-            state_.error = i18n::text(L"GitHub has limited requests. Please try again after the retry interval.", L"GitHub 请求已受限，请等待重试间隔后再试。");
+            state_.error = i18n::text(L"All update sources are temporarily rate-limited. Please try again after the retry interval.",
+                L"所有更新源暂时受到请求限制，请等待重试间隔后再试。");
         } else {
             cancel_ = false; busy_ = true;
             state_.state = State::Checking; state_.error.clear(); state_.checked = false;

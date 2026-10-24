@@ -262,11 +262,27 @@ their executable paths and extension IDs before registering them.
 
 ## Updates and older installations
 
-Glint checks GitHub Releases in the background and downloads newer EXE versions
+Glint checks for updates in the background and downloads newer EXE versions
 after verifying their SHA-256 and executable version. The first automatic check
 starts after a short startup delay; successful checks repeat daily. Right-click
 the tray icon and choose **Software updates / 软件更新** to check immediately,
 see progress or errors, and turn automatic checking and downloading on or off.
+
+Update checks first read the manifest directly from GitHub Releases, then try
+raw.githubusercontent.com, GitHub Pages and the Gcore/TestingCF jsDelivr routes.
+The GitHub API is a backup, followed by the ghfast.top, gh-proxy.com,
+ghfile.geekertao.top and ghproxy.net proxy routes. A successful manifest check
+does not query the API. EXE downloads
+try GitHub release and API addresses, then Pages and the proxy routes. The extra
+published feeds and Pages downloads become available after the first official
+release that publishes them. A failed or rate-limited source advances to the
+next route. When all available sources are rate-limited, Glint asks you to wait
+before checking again. Repeatedly clicking **Check for updates / 检查更新** does
+not bypass that wait. Ordinary failures delay automatic retries but still allow
+a manual check.
+
+These configured metadata sources supply the expected release hash; downloads
+must match that hash and the executable's version before installation.
 
 When the download is ready, choose **Restart and update / 重启并升级**. Glint
 does not install merely because it finished downloading or because you exit it.

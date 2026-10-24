@@ -30,10 +30,12 @@ enum class FailureKind { Network, RateLimit, Invalid, Cancelled, Filesystem };
 class Error : public std::runtime_error {
 public:
     Error(std::string message, FailureKind kind = FailureKind::Invalid,
-          std::uint64_t retry_after_seconds = 0)
-        : std::runtime_error(std::move(message)), kind(kind), retry_after_seconds(retry_after_seconds) {}
+          std::uint64_t retry_after_seconds = 0, std::string source_origin = {})
+        : std::runtime_error(std::move(message)), kind(kind), retry_after_seconds(retry_after_seconds),
+          source_origin(std::move(source_origin)) {}
     FailureKind kind;
     std::uint64_t retry_after_seconds;
+    std::string source_origin;
 };
 using Cancel = std::function<bool()>;
 using Progress = std::function<void(std::uint64_t received, std::uint64_t total)>;

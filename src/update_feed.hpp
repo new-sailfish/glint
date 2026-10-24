@@ -3,6 +3,8 @@
 #include "update_types.hpp"
 
 #include <optional>
+#include <map>
+#include <mutex>
 #include <span>
 #include <string_view>
 
@@ -17,6 +19,19 @@ std::string file_sha256(const std::filesystem::path &path);
 namespace feed {
 inline constexpr std::uint64_t kMetadataLimit = 1024 * 1024;
 inline constexpr std::uint64_t kBinaryLimit = 128 * 1024 * 1024;
+
+// The transport checks each actual redirect hop against this shared origin cooldown.
+class SourceCooldowns {
+  public:
+    explicit SourceCooldowns(std::function<std::int64_t()> now = {});
+    void check(std::string_view url);
+    void limit(std::string_view url, std::uint64_t seconds);
+
+  private:
+    std::function<std::int64_t()> now_;
+    std::mutex mutex_;
+    std::map<std::string, std::int64_t> until_;
+};
 
 struct Request {
     std::string url;

@@ -74,6 +74,7 @@ pwsh -NoProfile -File scripts/tests/check-release.test.ps1
 pwsh -NoProfile -File scripts/tests/package-release.test.ps1
 pwsh -NoProfile -File scripts/tests/build-version.test.ps1
 pwsh -NoProfile -File scripts/tests/reserve-ci-version.test.ps1
+pwsh -NoProfile -File scripts/tests/publish-update-feed.test.ps1
 ```
 
 CI runs these script checks before building.
@@ -258,6 +259,51 @@ publish a `v<build-version>` GitHub Release containing `Glint.exe`,
 Failed builds and pull requests do not publish. The application build workflow
 skips documentation-only changes; newer runs cancel obsolete runs of the same
 ref.
+
+### Update-source publishing
+
+After publishing the GitHub Release, the official build runs
+`scripts/publish-update-feed.ps1` to verify the packaged EXE against its manifest,
+reserved version and source commit, then publish the `update-feed` branch in
+`new-sailfish/glint`. That branch contains the latest `release-manifest.json`
+at its root and immutable `v<Version>/release-manifest.json` and
+`v<Version>/Glint.exe` pairs. Older versions remain available so a cached latest
+manifest still identifies downloadable bytes with the correct hash. Builds
+finishing out of order retain their pinned files without moving latest backward.
+
+The updater tries the GitHub Release manifest directly, then these metadata
+mirrors. The latest manifest is at each listed root; a selected version's
+manifest is also available at `v<Version>/release-manifest.json` under that root.
+
+| Source | Latest manifest | Executable route in updater |
+| --- | --- | --- |
+| GitHub raw | `https://raw.githubusercontent.com/new-sailfish/glint/update-feed/release-manifest.json` | Not used for executable downloads |
+| GitHub Pages | `https://new-sailfish.github.io/glint/updates/release-manifest.json` | `https://new-sailfish.github.io/glint/updates/v<Version>/Glint.exe` |
+| jsDelivr Gcore | `https://gcore.jsdelivr.net/gh/new-sailfish/glint@update-feed/release-manifest.json` | Not used for executable downloads |
+| jsDelivr Cloudflare test endpoint | `https://testingcf.jsdelivr.net/gh/new-sailfish/glint@update-feed/release-manifest.json` | Not used for executable downloads |
+
+If the direct manifest and mirrors fail, the client tries the GitHub API before
+its last-resort GitHub Release proxies: `ghfast.top`, `gh-proxy.com`,
+`ghfile.geekertao.top` and `ghproxy.net`. Executable downloads use the pinned
+GitHub Release asset, the Pages version directory and the configured fallback
+routes; raw GitHub and jsDelivr serve metadata for the client. These are the
+configured publication paths, and become available after an official build
+publishes the feed and Pages deployment completes. A local build does not
+publish or establish the online availability of these mirrors.
+
+The Pages workflow runs after a successful application build from the repository's
+default branch, as well as its existing website-change and manual triggers. It
+fetches `update-feed` and stages its verified files under `_site/updates/` beside
+the product website. Before the first feed publication, it publishes the website
+without an updates directory. Remote errors and invalid feed files fail the job.
+
+Publishing uses a temporary Git repository and a normal fast-forward push; it
+does not rewrite source branches or overwrite an existing version with different
+bytes. `GH_TOKEN` (or `GITHUB_TOKEN`) supplies repository contents write permission
+through an environment-based credential helper. The build fails visibly if feed
+publication fails, even when the GitHub Release already exists. A subsequent
+official build publishes a fresh reserved version. The fixture harness exercises
+publication and Pages staging using temporary local Git remotes only.
 
 ## Source layout
 

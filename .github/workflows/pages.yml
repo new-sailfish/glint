@@ -5,6 +5,12 @@ on:
     branches: [master, main]
     paths: ['site/**', 'docs/assets/**', '.github/workflows/pages.yml']
   workflow_dispatch:
+  # A token-authenticated feed push does not trigger another workflow. Publish
+  # updates only after the official build (including feed publication) succeeds.
+  workflow_run:
+    workflows: ['Build Glint']
+    types: [completed]
+    branches: [master, main]
 
 concurrency:
   group: github-pages
@@ -15,6 +21,12 @@ permissions:
 
 jobs:
   deploy:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event != 'pull_request' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.head_branch == github.event.repository.default_branch)
     runs-on: windows-2022
     timeout-minutes: 10
     permissions:
@@ -28,6 +40,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_run' && github.event.repository.default_branch || github.ref }}
       - uses: actions/configure-pages@v5
       - uses: actions/setup-node@v4
         with:
@@ -41,6 +54,11 @@ jobs:
           Copy-Item site/index.html, site/styles.css, site/app.js, site/i18n.js -Destination _site
           Copy-Item docs/assets/* -Destination _site/assets
           New-Item -ItemType File -Path _site/.nojekyll -Force | Out-Null
+      - name: Stage verified update feed
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .\scripts\publish-update-feed.ps1 -Mode Stage -SiteDirectory .\_site
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

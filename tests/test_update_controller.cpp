@@ -1,4 +1,5 @@
 #include "update_controller.hpp"
+#include "glint/core.hpp"
 #include <windows.h>
 #include <condition_variable>
 #include <iostream>
@@ -6,6 +7,31 @@
 
 using namespace glint::update;
 void require(bool v, const char* message) { if (!v) throw std::runtime_error(message); }
+void save_state(const std::wstring& key, const std::wstring& state) {
+    HKEY handle = nullptr;
+    require(RegCreateKeyExW(HKEY_CURRENT_USER, key.c_str(), 0, nullptr, 0, KEY_SET_VALUE, nullptr, &handle, nullptr) == ERROR_SUCCESS,
+        "create controller state fixture");
+    const auto result = RegSetValueExW(handle, L"State", 0, REG_SZ, reinterpret_cast<const BYTE*>(state.c_str()),
+        static_cast<DWORD>((state.size() + 1) * sizeof(wchar_t)));
+    RegCloseKey(handle);
+    require(result == ERROR_SUCCESS, "write controller state fixture");
+}
+glint::Json load_state(const std::wstring& key) {
+    DWORD bytes = 0;
+    require(RegGetValueW(HKEY_CURRENT_USER, key.c_str(), L"State", RRF_RT_REG_SZ, nullptr, nullptr, &bytes) == ERROR_SUCCESS,
+        "measure controller state");
+    std::wstring state(bytes / sizeof(wchar_t), L'\0');
+    require(RegGetValueW(HKEY_CURRENT_USER, key.c_str(), L"State", RRF_RT_REG_SZ, nullptr, state.data(), &bytes) == ERROR_SUCCESS,
+        "read controller state");
+    state.resize(wcsnlen(state.c_str(), state.size()));
+    std::string json;
+    json.reserve(state.size());
+    for (const auto ch : state) {
+        require(ch <= 0x7f, "controller state fixture is ASCII");
+        json.push_back(static_cast<char>(ch));
+    }
+    return glint::Json::parse(json);
+}
 int main() {
     const auto key = L"Software\\GlintUpdateTest-" + std::to_wstring(GetCurrentProcessId());
     std::mutex mutex;
@@ -102,6 +128,28 @@ int main() {
             require(found == before_identity_failure, "identity acquisition failure does not prepare an unbound update");
         }
         services.identity = [&] { return current_identity; };
+        services.find = [&](std::string_view, const Cancel&) -> std::optional<Release> { ++found; return {}; };
+        for (const auto* policy : {L"", L"\"sourcePolicy\":1,"}) {
+            RegDeleteTreeW(HKEY_CURRENT_USER, key.c_str());
+            save_state(key, std::wstring(L"{") + policy +
+                L"\"automatic\":true,\"retryAt\":10000,\"serverLimit\":8000,\"failures\":2}");
+            now = 3000;
+            const int before = found;
+            Controller controller("0.0.0", cache, notify, services, key);
+            now = 3030; controller.tick();
+            wait([&] { return controller.snapshot().checked; });
+            require(found == before + 1, "legacy GitHub cooldown allows immediate automatic fallback check");
+        }
+        RegDeleteTreeW(HKEY_CURRENT_USER, key.c_str());
+        save_state(key, L"{\"automatic\":true,\"retryAt\":10000,\"serverLimit\":0,\"failures\":2}");
+        {
+            now = 3000;
+            const int before = found;
+            Controller controller("0.0.0", cache, notify, services, key);
+            now = 3030; controller.tick();
+            require(controller.snapshot().state == State::Idle && found == before,
+                "legacy ordinary failure keeps automatic backoff");
+        }
         RegDeleteTreeW(HKEY_CURRENT_USER, key.c_str());
         services.find = [&](std::string_view, const Cancel&) -> std::optional<Release> {
             ++found; throw Error("limited", FailureKind::RateLimit, 120);
@@ -110,9 +158,18 @@ int main() {
             Controller controller("0.0.0", cache, notify, services, key);
             controller.check();
             wait([&] { return controller.snapshot().state == State::Error; });
+            controller.stop();
+            const auto state = load_state(key);
+            const auto* policy = state.find("sourcePolicy");
+            require(policy && policy->is_integer() && policy->as_integer() == 2,
+                "saved all-source cooldown records current source policy");
+        }
+        {
+            Controller controller("0.0.0", cache, notify, services, key);
             const int before = found;
             controller.check();
-            require(found == before, "manual check cannot bypass server rate limit");
+            require(controller.snapshot().state == State::Error && found == before,
+                "restarted manual check cannot bypass all-source rate limit");
             now += 121; controller.check();
             wait([&] { return found > before && controller.snapshot().state == State::Error; });
         }
