@@ -15,7 +15,7 @@ $failures = [Collections.Generic.List[string]]::new()
 $passed = 0
 $caseNumber = 0
 $ctestNames = @(
-  'glint_core', 'glint_setup_progress', 'glint_desktop_targets', 'glint_connection_overview', 'glint_language',
+  'glint_core', 'glint_setup_progress', 'glint_desktop_targets', 'glint_process_icons', 'glint_connection_overview', 'glint_language',
   'glint_search_navigation', 'glint_search_caption', 'glint_search_window', 'glint_hotkey', 'glint_hotkey_window',
   'glint_pipe_server', 'glint_foreground_permission', 'glint_native_host',
   'glint_registration', 'glint_bridge_installation', 'glint_extension_identity',
@@ -216,6 +216,14 @@ try {
       Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_search_window')
       Assert-Contains $result.Output "maps $file"
     }
+  }
+  Test-Case 'process icon changes select async cache and native rendering checks' {
+    foreach ($file in @('src/process_icons.cpp', 'src/process_icons.hpp')) {
+      $result = Invoke-Selector @{ List = $true; Files = @($file) }
+      Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_process_icons', 'glint_search_window')
+    }
+    $result = Invoke-Selector @{ List = $true; Files = @('tests/test_process_icons.cpp') }
+    Assert-Tests $result 'CTest' @('glint_core', 'glint_desktop_targets', 'glint_bridge_installation', 'glint_process_icons')
   }
   Test-Case 'UI theme and illustration select the setup window tests' {
     $result = Invoke-Selector @{ List = $true; Files = @('src/ui_theme.hpp', 'src/setup_illustration.hpp') }

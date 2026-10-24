@@ -1,10 +1,12 @@
 // Exercise the real search window without starting its bridge, desktop
 // discovery, updater, global shortcut, or tray integration.
 #include "../src/win_app.cpp"
+#include "browser_launch.hpp"
 
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <condition_variable>
 
 #pragma comment(linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
@@ -81,10 +83,74 @@ private:
     void* pixels_ = nullptr;
 };
 
+// Give real native custom drawing a recognizable icon without depending on
+// installed applications or the machine's Shell image-list contents.
+class SearchIconLoader {
+public:
+    static constexpr COLORREF color = RGB(217, 33, 197);
+    static constexpr COLORREF edge_color = RGB(25, 183, 211);
+
+    SearchIconLoader() {
+        images_ = ImageList_Create(16, 16, ILC_COLOR32, 2, 1);
+        require_search(images_ != nullptr, "create shared search icon fixture");
+        BITMAPINFO info{};
+        info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        info.bmiHeader.biWidth = 16; info.bmiHeader.biHeight = -16;
+        info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        void* pixels = nullptr;
+        HBITMAP bitmap = CreateDIBSection(nullptr, &info, DIB_RGB_COLORS, &pixels, nullptr, 0);
+        require_search(bitmap && pixels, "create search icon fixture pixels");
+        const DWORD colors[] = {0xffd921c5u, 0xff19b7d3u};
+        for (int i = 0; i < 2; ++i) {
+            std::fill_n(static_cast<DWORD*>(pixels), 16 * 16, colors[i]);
+            require_search(ImageList_Add(images_, bitmap, nullptr) == i, "populate distinct shared search icon fixtures");
+        }
+        DeleteObject(bitmap);
+    }
+    ~SearchIconLoader() { release(); ImageList_Destroy(images_); }
+
+    icons::Cache::Loader loader() {
+        return [this](const std::wstring& path, UINT) {
+            std::unique_lock lock(mutex_);
+            requested_ = true;
+            changed_.notify_all();
+            // Bound even fixture failures, so a failed test cannot hang cache
+            // shutdown while a worker waits for its deliberately slow lookup.
+            changed_.wait_for(lock, std::chrono::seconds(5), [this] { return released_; });
+            return icons::Icon{images_, path.ends_with(L"msedge.exe") ? 1 : 0};
+        };
+    }
+    void wait_requested() {
+        std::unique_lock lock(mutex_);
+        require_search(changed_.wait_for(lock, std::chrono::seconds(3), [this] { return requested_; }),
+            "native result drawing requests its application icon asynchronously");
+    }
+    void release() {
+        std::lock_guard lock(mutex_);
+        released_ = true;
+        changed_.notify_all();
+    }
+    HIMAGELIST images() const { return images_; }
+
+private:
+    HIMAGELIST images_ = nullptr;
+    std::mutex mutex_;
+    std::condition_variable changed_;
+    bool requested_ = false;
+    bool released_ = false;
+};
+
+struct ReleaseSearchIconLoader {
+    SearchIconLoader& loader;
+    ~ReleaseSearchIconLoader() { loader.release(); }
+};
+
 struct SearchWindowTestAccess {
     DesktopApp app;
 
-    explicit SearchWindowTestAccess(bool populate = true) {
+    explicit SearchWindowTestAccess(bool populate = true, icons::Cache::Loader loader = {})
+        : app({}, std::move(loader)) {
         require_search(app.create_window(false), "create actual search window without shell integration");
         require_search(!app.hotkey_.active() && !app.tray_added_, "test does not register a global shortcut or tray icon");
         if (populate) {
@@ -361,6 +427,223 @@ struct SearchWindowTestAccess {
             "expanded empty connection details explain how to connect a browser");
         test.verify_controls_fit();
     }
+
+    static void check_application_icons(const std::filesystem::path& screenshots) {
+        SearchIconLoader loader;
+        {
+            SearchWindowTestAccess test(true, loader.loader());
+            ReleaseSearchIconLoader release_on_exit{loader};
+            auto& app = test.app;
+            require_search(app.index_.apply(12, Json::Object{{"type", "hello"}, {"version", 1},
+                {"sessionId", "edge-test"}, {"profileId", "edge-test"}, {"browser", "Edge"},
+                {"profileLabel", "Personal"}}), "create second browser icon fixture");
+            const Json::Array edge_tabs{Json::Object{{"tabId", 20}, {"windowId", 9}, {"index", 0},
+                {"title", "Edge project"}, {"url", "https://example.test/edge"},
+                {"active", true}, {"pinned", false}, {"lastAccessed", std::int64_t{1730000000000}}}};
+            require_search(app.index_.apply(12, Json::Object{{"type", "snapshot"}, {"version", 1}, {"tabs", edge_tabs}}),
+                "seed an Edge target outside the recent cards");
+            const std::wstring chrome_path = L"C:\\Users\\Éric\\Chrome\\chrome.exe";
+            const std::wstring edge_path = L"C:\\GlintTests\\Edge\\msedge.exe";
+            auto connections = app.index_.connections();
+            for (auto& connection : connections)
+                connection.executable_path = connection.connection_id == 11 ? chrome_path : edge_path;
+            app.connection_overview_.update(connections);
+            app.refresh_results(true);
+            test.size(96);
+
+            const auto keys = [&app] {
+                std::vector<TabKey> result;
+                for (const auto& row : app.rows_) result.push_back(row.key);
+                return result;
+            };
+            const auto select_fifth = [&app] {
+                ListView_SetItemState(app.list_, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+                ListView_SetItemState(app.list_, 4, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+                SetFocus(app.edit_);
+            };
+            const auto wait_ready = [&app, &loader](const std::wstring& path) {
+                const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+                do {
+                    const auto icon = app.icon_cache_.get(path, app.dpi_);
+                    if (icon.images == loader.images() && icon.index == (path.ends_with(L"msedge.exe") ? 1 : 0)) return;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                } while (std::chrono::steady_clock::now() < deadline);
+                require_search(false, "background search icon lookup completes within its deadline");
+            };
+            const auto assert_preserved = [&app, &keys](const std::vector<TabKey>& before,
+                                                       std::wstring_view query, const char* message) {
+                wchar_t actual[64]{}; GetWindowTextW(app.edit_, actual, static_cast<int>(std::size(actual)));
+                require_search(keys() == before && std::wstring_view(actual) == query &&
+                    GetFocus() == app.edit_ && ListView_GetNextItem(app.list_, -1, LVNI_SELECTED) == 4, message);
+            };
+
+            require_search((GetWindowLongPtrW(app.list_, GWL_STYLE) & LVS_SHAREIMAGELISTS) != 0 &&
+                (GetWindowLongPtrW(app.connection_list_, GWL_STYLE) & LVS_SHAREIMAGELISTS) != 0,
+                "native result and connection controls do not take ownership of shared image lists");
+            SearchRender pending(app.list_);
+            loader.wait_requested();
+            require_search(!pending.contains(SearchIconLoader::color),
+                "a pending application icon paints its fallback without waiting for Shell lookup");
+
+            // A lookup started in card mode completes after the user has typed
+            // and selected a different row in the full search results.
+            SetWindowTextW(app.edit_, L"example.test");
+            require_search(app.rows_.size() == 9 && ListView_GetView(app.list_) == LV_VIEW_DETAILS,
+                "typing while icon lookup is pending remains responsive");
+            select_fifth();
+            const auto report_keys = keys();
+            SearchRender pending_report(app.list_);
+            loader.release();
+            wait_ready(chrome_path); wait_ready(edge_path);
+            ValidateRect(app.list_, nullptr);
+            app.icons_changed();
+            require_search(GetUpdateRect(app.list_, nullptr, FALSE) != FALSE,
+                "completed application icons invalidate the current source rows for repaint");
+            assert_preserved(report_keys, L"example.test",
+                "icon completion preserves search text, result order, selected row, and edit focus");
+            SearchRender report_icons(app.list_);
+            require_search(report_icons.contains(SearchIconLoader::color) && report_icons.contains(SearchIconLoader::edge_color),
+                "actual report custom drawing displays distinct application icons");
+            for (std::size_t i = 0; i < app.rows_.size(); ++i) {
+                wchar_t source[128]{};
+                ListView_GetItemText(app.list_, static_cast<int>(i), 2, source, static_cast<int>(std::size(source)));
+                require_search(std::wstring_view(source) == (app.rows_[i].key.connection_id == 11 ? L"Chrome" : L"Edge"),
+                    "result source labels show browser names without profile suffixes");
+                RECT cell{};
+                require_search(ListView_GetSubItemRect(app.list_, static_cast<int>(i), 2, LVIR_BOUNDS, &cell) != FALSE,
+                    "report source cells expose their native bounds");
+                const COLORREF expected = app.rows_[i].key.connection_id == 11
+                    ? SearchIconLoader::color : SearchIconLoader::edge_color;
+                require_search(report_icons.pixel(cell.left + app.px(17), (cell.top + cell.bottom) / 2) == expected,
+                    "each report source cell draws the icon belonging to that row's executable");
+            }
+            Tab native; native.key.source = TabSource::Window; native.application = L"Claude";
+            require_search(app.source_name(native) == L"Claude", "desktop window source labels retain the application name");
+            native.key.source = TabSource::UiTab; native.application = L"Notepad";
+            require_search(app.source_name(native) == L"Notepad", "native tab source labels retain the application name");
+            test.screenshot(screenshots, L"search-icons-results-96");
+
+            SetWindowTextW(app.edit_, L"");
+            for (const UINT dpi : {96u, 144u, 192u}) {
+                test.size(dpi);
+                select_fifth();
+                const auto card_keys = keys();
+                SearchRender request(app.list_);
+                wait_ready(chrome_path);
+                ValidateRect(app.list_, nullptr);
+                app.icons_changed();
+                if (dpi != 96) require_search(GetUpdateRect(app.list_, nullptr, FALSE) != FALSE,
+                    "completion matches the uppercase Unicode executable path and repaints its recent cards");
+                assert_preserved(card_keys, L"",
+                    "application icon refresh preserves recent card order and keyboard selection at every DPI");
+                require_search(SearchRender(app.list_).contains(SearchIconLoader::color),
+                    "actual recent card drawing includes the application icon at every DPI");
+                test.verify_controls_fit();
+                test.screenshot(screenshots, L"search-icons-recent-" + std::to_wstring(dpi));
+            }
+
+            SendMessageW(app.connection_summary_, BM_CLICK, 0, 0);
+            SearchRender connection_request(app.connection_list_);
+            wait_ready(edge_path);
+            app.icons_changed();
+            SearchRender connection_icons(app.connection_list_);
+            require_search(connection_icons.contains(SearchIconLoader::color) && connection_icons.contains(SearchIconLoader::edge_color),
+                "expanded connection details display distinct application icons");
+            bool found_work = false;
+            for (int i = 0; i < ListView_GetItemCount(app.connection_list_); ++i) {
+                wchar_t profile[128]{};
+                ListView_GetItemText(app.connection_list_, i, 0, profile, static_cast<int>(std::size(profile)));
+                found_work = found_work || std::wstring_view(profile).find(L"Work") != std::wstring_view::npos;
+                RECT cell{};
+                ListView_GetSubItemRect(app.connection_list_, i, 0, LVIR_BOUNDS, &cell);
+                const COLORREF expected = app.connection_overview_.profiles()[static_cast<std::size_t>(i)].browser == L"chrome"
+                    ? SearchIconLoader::color : SearchIconLoader::edge_color;
+                require_search(connection_icons.pixel(cell.left + app.px(17), (cell.top + cell.bottom) / 2) == expected,
+                    "each connection profile draws its own browser executable icon");
+            }
+            require_search(found_work, "expanded connection details retain profile names for disambiguation");
+            test.verify_controls_fit();
+            test.screenshot(screenshots, L"search-icons-connections-192");
+        }
+        require_search(ImageList_GetImageCount(loader.images()) == 2,
+            "closing the search window preserves the shared icon image list");
+    }
+
+    static void preview_system_application_icons(const std::filesystem::path& screenshots) {
+        if (screenshots.empty()) return;
+        struct BrowserPreview {
+            const char* name;
+            std::filesystem::path executable;
+            ConnectionId connection;
+        };
+        std::vector<BrowserPreview> browsers;
+        for (const auto browser : {browser_launch::Browser::Chrome, browser_launch::Browser::Edge}) {
+            auto executable = browser_launch::find_executable(browser);
+            if (!executable.empty()) browsers.push_back({
+                browser == browser_launch::Browser::Chrome ? "Chrome" : "Edge", std::move(executable),
+                browser == browser_launch::Browser::Chrome ? 111u : 112u});
+        }
+        if (browsers.empty()) {
+            std::cout << "System icon preview skipped: Chrome and Edge executable paths are unavailable\n";
+            return;
+        }
+
+        // Read installed executable icons only. Every title, URL and profile
+        // below is synthetic; this preview never starts or connects a browser.
+        SearchWindowTestAccess test(false);
+        auto& app = test.app;
+        for (const auto& browser : browsers) {
+            const std::string id = "system-icon-preview-" + std::to_string(browser.connection);
+            require_search(app.index_.apply(browser.connection, Json::Object{{"type", "hello"}, {"version", 1},
+                {"sessionId", id}, {"profileId", id}, {"browser", browser.name}, {"profileLabel", "Work"}}),
+                "create synthetic browser connection for system icon preview");
+            Json::Array tabs;
+            const char* titles[] = {"Glint documentation", "Release checklist", "Project notes"};
+            for (int i = 0; i < 3; ++i) {
+                tabs.emplace_back(Json::Object{{"tabId", i + 1}, {"windowId", 7}, {"index", i},
+                    {"title", titles[i]}, {"url", "https://example.test/preview/" + std::to_string(i + 1)},
+                    {"active", i == 0}, {"pinned", false},
+                    {"lastAccessed", std::int64_t{1730000001000} - i * 100 -
+                        static_cast<std::int64_t>(browser.connection - 111) * 50}});
+            }
+            require_search(app.index_.apply(browser.connection,
+                Json::Object{{"type", "snapshot"}, {"version", 1}, {"tabs", tabs}}),
+                "seed synthetic tabs for system icon preview");
+        }
+        auto connections = app.index_.connections();
+        for (auto& connection : connections) {
+            const auto browser = std::find_if(browsers.begin(), browsers.end(), [&](const auto& candidate) {
+                return candidate.connection == connection.connection_id;
+            });
+            if (browser != browsers.end()) connection.executable_path = browser->executable.wstring();
+        }
+        app.connection_overview_.update(connections);
+        app.refresh_results(true);
+        test.size(96);
+        SearchRender request(app.list_);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        bool ready = false;
+        do {
+            ready = std::all_of(browsers.begin(), browsers.end(), [&app](const auto& browser) {
+                const auto icon = app.icon_cache_.get(browser.executable.wstring(), app.dpi_);
+                return icon.images && icon.index >= 0 && icon.index < ImageList_GetImageCount(icon.images);
+            });
+            if (ready) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        } while (std::chrono::steady_clock::now() < deadline);
+        if (!ready) {
+            std::cout << "System icon preview skipped: Shell icon lookup did not complete within its deadline\n";
+            return;
+        }
+        app.icons_changed();
+        test.verify_controls_fit();
+        test.screenshot(screenshots, L"search-system-icons-96");
+        SetWindowTextW(app.edit_, L"example.test");
+        test.screenshot(screenshots, L"search-system-icons-results-96");
+        SendMessageW(app.connection_summary_, BM_CLICK, 0, 0);
+        test.verify_controls_fit();
+        test.screenshot(screenshots, L"search-system-icons-connections-96");
+    }
 };
 
 } // namespace
@@ -385,6 +668,8 @@ int wmain(int argc, wchar_t** argv) {
         glint::SearchWindowTestAccess::check_activated_targets_return_as_recent_cards();
         glint::SearchWindowTestAccess::check_dpi_and_rendering(screenshots);
         glint::SearchWindowTestAccess::check_empty_connections();
+        glint::SearchWindowTestAccess::check_application_icons(screenshots);
+        glint::SearchWindowTestAccess::preview_system_application_icons(screenshots);
         std::cout << "Search window integration checks passed\n";
         return 0;
     } catch (const std::exception& error) {

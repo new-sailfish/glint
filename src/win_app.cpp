@@ -55,6 +55,7 @@ constexpr UINT WM_SHOW_SETUP = WM_APP + 3;
 constexpr UINT WM_SHOW_SEARCH = WM_APP + 4;
 constexpr UINT WM_UPDATE_EVENT = WM_APP + 5;
 constexpr UINT WM_DESKTOP_EVENT = WM_APP + 6;
+constexpr UINT WM_ICON_EVENT = WM_APP + 7;
 constexpr UINT_PTR UPDATE_TIMER = 20;
 constexpr UINT_PTR STARTUP_TIMER = 21;
 constexpr UINT ID_TRAY_SHOW = 1001;
@@ -74,9 +75,10 @@ constexpr wchar_t kClassName[] = L"Glint.SearchWindow";
 
 class DesktopApp {
 public:
-    explicit DesktopApp(std::vector<std::wstring> warnings = {}) : pipe_([this](ConnectionId id, std::string message) { receive(id, std::move(message)); },
+    explicit DesktopApp(std::vector<std::wstring> warnings = {}, icons::Cache::Loader icon_loader = {}) : pipe_([this](ConnectionId id, std::string message) { receive(id, std::move(message)); },
                          [this](ConnectionId id) { disconnected(id); },
-                         [this](ConnectionId id, std::string request) { send_failed(id, std::move(request)); }), startup_warnings_(std::move(warnings)) {}
+                         [this](ConnectionId id, std::string request) { send_failed(id, std::move(request)); }),
+                         icon_cache_(std::move(icon_loader)), startup_warnings_(std::move(warnings)) {}
     ~DesktopApp() { shutdown(); }
 
     int run(bool open_setup) {
@@ -181,6 +183,7 @@ private:
     ConnectionOverview connection_overview_;
     PipeServer pipe_;
     desktop::DesktopTargetService desktop_targets_;
+    icons::Cache icon_cache_;
     std::vector<std::wstring> startup_warnings_;
     std::mutex event_mutex_;
     std::vector<std::pair<ConnectionId, std::string>> events_;
@@ -199,6 +202,9 @@ private:
         if (message == self->taskbar_created_) { self->tray_added_ = false; self->add_tray(); return 0; }
         switch (message) {
         case WM_SETTINGCHANGE: {
+            self->icon_cache_.invalidate();
+            if (self->list_) InvalidateRect(self->list_, nullptr, FALSE);
+            if (self->connection_list_) InvalidateRect(self->connection_list_, nullptr, FALSE);
             const auto previous = i18n::current_language.load();
             i18n::refresh();
             if (previous != i18n::current_language) {
@@ -211,6 +217,7 @@ private:
         case WM_SHOW_SEARCH: self->show_search(); return 0;
         case WM_UPDATE_EVENT: self->update_changed(); return 0;
         case WM_DESKTOP_EVENT: self->desktop_changed(); return 0;
+        case WM_ICON_EVENT: self->icons_changed(); return 0;
         case WM_TIMER:
             if (wparam == ID_LANGUAGE_RETRY) { self->sync_extension_languages(); return 0; }
             if (wparam == UPDATE_TIMER && self->updater_) self->updater_->tick();
@@ -328,6 +335,7 @@ private:
             break;
         case WM_DPICHANGED: {
             self->dpi_ = HIWORD(wparam);
+            self->icon_cache_.invalidate();
             self->update_font();
             const auto* rect = reinterpret_cast<RECT*>(lparam);
             MONITORINFO monitor{sizeof(monitor)};
@@ -451,6 +459,7 @@ private:
             tray_.cbSize = sizeof(tray_); tray_.hWnd = window_; tray_.uID = 1; tray_.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP; tray_.uCallbackMessage = WM_TRAY_EVENT;
             tray_.hIcon = ui::icon(klass.hInstance); wcscpy_s(tray_.szTip, (std::wstring(L"Glint " GLINT_VERSION_WSTRING) + i18n::text(L" · Tab and window search", L" · 标签页与窗口搜索")).c_str()); add_tray();
         }
+        icon_cache_.start(window_, WM_ICON_EVENT);
         layout();
         return true;
     }
@@ -568,22 +577,25 @@ private:
         RestoreDC(dc, content_saved);
     }
 
-    LRESULT draw_list(NMLVCUSTOMDRAW& draw) const {
+    LRESULT draw_list(NMLVCUSTOMDRAW& draw) {
         const bool results = draw.nmcd.hdr.hwndFrom == list_;
+        const bool contrast = ui::high_contrast();
         if (results && query_empty_ && draw.nmcd.dwDrawStage == CDDS_ITEMPREPAINT) {
             const auto item = static_cast<std::size_t>(draw.nmcd.dwItemSpec);
-            if (item < rows_.size()) return draw_search_card(draw, rows_[item], source_name(rows_[item]), dpi_, font_, small_font_);
+            if (item < rows_.size()) return draw_search_card(draw, rows_[item], source_name(rows_[item]), dpi_, font_, small_font_,
+                icon_cache_.get(rows_[item].executable_path, dpi_));
         }
-        if (ui::high_contrast() && !(results && query_empty_)) return CDRF_DODEFAULT;
         if (draw.nmcd.dwDrawStage == CDDS_PREPAINT)
             return CDRF_NOTIFYITEMDRAW | CDRF_NOTIFYPOSTPAINT;
         if (draw.nmcd.dwDrawStage == CDDS_ITEMPREPAINT) return CDRF_NOTIFYSUBITEMDRAW | CDRF_NOTIFYPOSTPAINT;
         if (draw.nmcd.dwDrawStage == (CDDS_ITEMPREPAINT | CDDS_SUBITEM)) {
             const int item = static_cast<int>(draw.nmcd.dwItemSpec);
             const bool selected = (ListView_GetItemState(draw.nmcd.hdr.hwndFrom, item, LVIS_SELECTED) & LVIS_SELECTED) != 0;
-            draw.clrTextBk = selected ? ui::wash() : item % 2 ? RGB(249, 251, 255) : ui::surface();
-            draw.clrText = !results || draw.iSubItem == 0 ? ui::ink() : ui::muted();
-            if (!results && draw.iSubItem == 1) {
+            draw.clrTextBk = contrast ? GetSysColor(selected ? COLOR_HIGHLIGHT : COLOR_WINDOW)
+                : selected ? ui::wash() : item % 2 ? RGB(249, 251, 255) : ui::surface();
+            draw.clrText = contrast ? GetSysColor(selected ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT)
+                : !results || draw.iSubItem == 0 ? ui::ink() : ui::muted();
+            if (!contrast && !results && draw.iSubItem == 1) {
                 const auto& profiles = connection_overview_.profiles();
                 if (item >= 0 && static_cast<std::size_t>(item) < profiles.size()) {
                     const auto state = profiles[static_cast<std::size_t>(item)].state;
@@ -602,6 +614,16 @@ private:
             SetBkMode(draw.nmcd.hdc, TRANSPARENT); SetTextColor(draw.nmcd.hdc, draw.clrText);
             SelectObject(draw.nmcd.hdc, font_);
             cell.left += px(9); cell.right -= px(7);
+            if ((results && draw.iSubItem == 2) || (!results && draw.iSubItem == 0)) {
+                std::wstring_view path;
+                const auto row = static_cast<std::size_t>(item);
+                if (results && row < rows_.size()) path = rows_[row].executable_path;
+                const auto& profiles = connection_overview_.profiles();
+                if (!results && row < profiles.size()) path = profiles[row].executable_path;
+                draw_application_icon(icon_cache_.get(path, dpi_), draw.nmcd.hdc,
+                    cell.left, cell.top + (cell.bottom - cell.top - px(16)) / 2, px(16));
+                cell.left += px(22);
+            }
             DrawTextW(draw.nmcd.hdc, text, -1, &cell, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
             RestoreDC(draw.nmcd.hdc, saved);
             return CDRF_SKIPDEFAULT;
@@ -640,8 +662,33 @@ private:
 
     std::wstring source_name(const Tab& row) const {
         if (row.key.source != TabSource::Browser) return row.application;
-        auto source = connection_overview_.name_for(row.key.connection_id);
-        return source.empty() ? row.browser : source;
+        std::wstring name = row.browser;
+        std::transform(name.begin(), name.end(), name.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+        if (name == L"chrome") return L"Chrome";
+        if (name == L"edge" || name == L"msedge") return L"Edge";
+        return row.browser.empty() ? i18n::text(L"Browser", L"浏览器") : row.browser;
+    }
+
+    void icons_changed() {
+        const auto paths = icon_cache_.take_updates();
+        const auto changed = [&paths](std::wstring_view path) {
+            const auto normalized = icons::normalize_path(path);
+            return std::find(paths.begin(), paths.end(), normalized) != paths.end();
+        };
+        // A full pending queue can temporarily reject a newly visible path.
+        // Retry the visible viewport once a cache slot becomes available.
+        if (std::find(paths.begin(), paths.end(), std::wstring{}) != paths.end()) {
+            InvalidateRect(list_, nullptr, FALSE);
+            InvalidateRect(connection_list_, nullptr, FALSE);
+            return;
+        }
+        // Match current immutable executable paths, never saved row numbers or
+        // PIDs. Reordered/removed results cannot receive another target's icon.
+        for (std::size_t i = 0; i < rows_.size(); ++i)
+            if (changed(rows_[i].executable_path)) ListView_RedrawItems(list_, static_cast<int>(i), static_cast<int>(i));
+        const auto& profiles = connection_overview_.profiles();
+        for (std::size_t i = 0; i < profiles.size(); ++i)
+            if (changed(profiles[i].executable_path)) ListView_RedrawItems(connection_list_, static_cast<int>(i), static_cast<int>(i));
     }
 
     void show_system_menu(POINT point = {-1, -1}) {
@@ -793,13 +840,7 @@ private:
         // Translation does not change the query or connection data. Updating
         // cells in place preserves selection, keyboard focus and scroll.
         for (std::size_t i = 0; i < rows_.size(); ++i) {
-            std::wstring name;
-            if (rows_[i].key.source == TabSource::Browser) {
-                name = connection_overview_.name_for(rows_[i].key.connection_id);
-                if (name.empty()) name = rows_[i].browser;
-            } else {
-                name = rows_[i].application;
-            }
+            std::wstring name = source_name(rows_[i]);
             ListView_SetItemText(list_, static_cast<int>(i), 2, name.data());
         }
         const auto& profiles = connection_overview_.profiles();
@@ -836,6 +877,7 @@ private:
         query_empty_ = query.empty();
         result_selection_.prepare(list_, query, rows_, reset_selection);
         rows_ = index_.search(query, query_empty_ ? (std::numeric_limits<std::size_t>::max)() : 1000);
+        for (auto& row : rows_) row.executable_path = connection_overview_.executable_path_for(row.key.connection_id);
         auto native = desktop_targets_.search(query, query_empty_ ? (std::numeric_limits<std::size_t>::max)() : 1000);
         rows_.insert(rows_.end(), std::make_move_iterator(native.begin()),
             std::make_move_iterator(native.end()));
@@ -892,7 +934,8 @@ private:
     }
 
     void refresh_connections() {
-        const auto connections = index_.connections();
+        auto connections = index_.connections();
+        for (auto& connection : connections) connection.executable_path = pipe_.executable_path(connection.connection_id);
         connection_overview_.update(connections);
         const auto& profiles = connection_overview_.profiles();
         update_connection_summary();
@@ -1029,6 +1072,7 @@ private:
 
     void shutdown() {
         if (!window_) return;
+        icon_cache_.stop();
         KillTimer(window_, UPDATE_TIMER); KillTimer(window_, STARTUP_TIMER);
         update_window_.reset();
         if (updater_) { updater_->stop(); updater_.reset(); }

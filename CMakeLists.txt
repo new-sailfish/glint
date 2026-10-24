@@ -33,6 +33,7 @@ if(WIN32)
     src/main.cpp
     src/win_app.cpp
     src/desktop_targets.cpp
+    src/process_icons.cpp
     src/hotkey.cpp
     src/hotkey_window.cpp
     src/update_window.cpp
@@ -81,6 +82,17 @@ if(GLINT_BUILD_TESTS)
   add_test(NAME glint_setup_progress COMMAND glint_setup_progress_tests)
 
   if(WIN32)
+    add_executable(glint_process_icons_tests tests/test_process_icons.cpp src/process_icons.cpp)
+    target_include_directories(glint_process_icons_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(glint_process_icons_tests PRIVATE user32 gdi32 shell32 comctl32 ole32)
+    target_compile_features(glint_process_icons_tests PRIVATE cxx_std_20)
+    target_compile_definitions(glint_process_icons_tests PRIVATE UNICODE _UNICODE NOMINMAX)
+    if(MSVC)
+      target_compile_options(glint_process_icons_tests PRIVATE /W4 /permissive- /EHsc /utf-8 /UNDEBUG)
+      set_property(TARGET glint_process_icons_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME glint_process_icons COMMAND glint_process_icons_tests)
+
     add_executable(glint_desktop_targets_tests
       tests/test_desktop_targets.cpp
       src/desktop_targets.cpp

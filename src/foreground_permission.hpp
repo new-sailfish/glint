@@ -21,13 +21,16 @@ public:
     BrowserForegroundTarget& operator=(const BrowserForegroundTarget&) = delete;
 
     [[nodiscard]] DWORD process_id() const noexcept;
+    [[nodiscard]] const std::wstring& executable_path() const noexcept;
     [[nodiscard]] bool allow() const noexcept;
     [[nodiscard]] static BrowserForegroundTarget from_bridge(DWORD bridge_pid);
 
 private:
-    explicit BrowserForegroundTarget(HANDLE process, DWORD pid) noexcept;
+    friend struct BrowserForegroundTargetTestAccess;
+    explicit BrowserForegroundTarget(HANDLE process, DWORD pid, std::wstring executable_path) noexcept;
     HANDLE process_ = nullptr;
     DWORD pid_ = 0;
+    std::wstring executable_path_;
 };
 
 namespace detail {

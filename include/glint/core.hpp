@@ -124,6 +124,8 @@ struct Tab {
     std::uint32_t process_id = 0;
     std::uint64_t process_creation_time = 0;
     std::vector<int> runtime_id;
+    // Discovered locally from the owning process, never supplied by the protocol.
+    std::wstring executable_path;
     bool operator==(const Tab&) const = default;
 };
 
@@ -135,6 +137,7 @@ struct ConnectionInfo {
     std::wstring profile_label;
     bool synchronized = false;
     std::size_t tab_count = 0;
+    std::wstring executable_path;
 };
 
 // Owns in-memory data only. apply/search/disconnect are thread-safe. A hello

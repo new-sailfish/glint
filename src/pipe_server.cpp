@@ -70,6 +70,14 @@ public:
             found->second->foreground.allow();
     }
 
+    std::wstring executable_path(ConnectionId id) {
+        std::lock_guard lock(mutex_);
+        const auto found = clients_.find(id);
+        if (found == clients_.end() || stopping_.load() ||
+            WaitForSingleObject(found->second->stop_event, 0) != WAIT_TIMEOUT) return {};
+        return found->second->foreground.executable_path();
+    }
+
     void stop() {
         if (stopping_.exchange(true)) return;
         SetEvent(stop_event_);
@@ -253,5 +261,6 @@ void PipeServer::start() { impl_->start(); }
 bool PipeServer::ready() const { return impl_->ready(); }
 bool PipeServer::send(ConnectionId id, std::string_view message) { return impl_->send(id, message); }
 bool PipeServer::allow_foreground(ConnectionId id) { return impl_->allow_foreground(id); }
+std::wstring PipeServer::executable_path(ConnectionId id) const { return impl_->executable_path(id); }
 void PipeServer::stop() { impl_->stop(); }
 } // namespace glint

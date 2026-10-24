@@ -2,6 +2,7 @@
 
 #include "glint/core.hpp"
 #include "ui_theme.hpp"
+#include "process_icons.hpp"
 
 #include <windows.h>
 #include <commctrl.h>
@@ -10,6 +11,13 @@
 #include <string>
 
 namespace glint {
+
+inline void draw_application_icon(icons::Icon icon, HDC dc, int x, int y, int size) {
+    if (icons::draw_icon(icon, dc, x, y, size)) return;
+    // LoadIcon returns a shared USER resource, not an owned Shell extraction.
+    if (const HICON placeholder = LoadIconW(nullptr, IDI_APPLICATION))
+        DrawIconEx(dc, x, y, placeholder, size, size, 0, nullptr, DI_NORMAL);
+}
 
 // Keep the native list-view's selection, hit testing and accessibility in both
 // presentations. Only the empty-query tile layout and painting are specialized.
@@ -32,7 +40,8 @@ inline int layout_search_cards(HWND list, UINT dpi, int width, int height, std::
 }
 
 inline LRESULT draw_search_card(NMLVCUSTOMDRAW& draw, const Tab& tab,
-                               std::wstring_view source, UINT dpi, HFONT font, HFONT small_font) {
+                               std::wstring_view source, UINT dpi, HFONT font, HFONT small_font,
+                               icons::Icon icon = {}) {
     const auto px = [dpi](int value) { return MulDiv(value, dpi, 96); };
     const HWND list = draw.nmcd.hdr.hwndFrom;
     const int item = static_cast<int>(draw.nmcd.dwItemSpec);
@@ -59,6 +68,8 @@ inline LRESULT draw_search_card(NMLVCUSTOMDRAW& draw, const Tab& tab,
     SelectObject(dc, small_font);
     SetTextColor(dc, muted);
     RECT label = content; label.bottom = label.top + px(18); label.right -= px(26);
+    draw_application_icon(icon, dc, label.left, label.top + px(1), px(16));
+    label.left += px(22);
     DrawTextW(dc, source.data(), static_cast<int>(source.size()), &label,
         DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
     if (selected) {

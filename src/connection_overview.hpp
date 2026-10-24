@@ -24,6 +24,7 @@ struct ProfileConnection {
     std::size_t tab_count = 0;
     std::vector<ConnectionId> connection_ids;
     ConnectionId current_connection_id = 0;
+    std::wstring executable_path;
 
     std::wstring name() const {
         return (browser.empty() ? std::wstring(i18n::text(L"Browser", L"浏览器")) : browser) + L"-" + (profile_label.empty()
@@ -73,6 +74,7 @@ public:
             if (!choose) continue;
             profile.current_connection_id = connection.connection_id;
             profile.profile_label = connection.profile_label;
+            if (!connection.executable_path.empty()) profile.executable_path = connection.executable_path;
             profile.state = connection.synchronized
                 ? ProfileConnectionState::connected : ProfileConnectionState::synchronizing;
             profile.tab_count = connection.synchronized ? connection.tab_count : 0;
@@ -88,6 +90,13 @@ public:
         for (const auto& profile : profiles_) {
             if (std::find(profile.connection_ids.begin(), profile.connection_ids.end(), id) != profile.connection_ids.end())
                 return profile.name();
+        }
+        return {};
+    }
+    std::wstring executable_path_for(ConnectionId id) const {
+        for (const auto& profile : profiles_) {
+            if (std::find(profile.connection_ids.begin(), profile.connection_ids.end(), id) != profile.connection_ids.end())
+                return profile.executable_path;
         }
         return {};
     }

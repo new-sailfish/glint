@@ -29,6 +29,7 @@ struct WindowFacts {
     bool shell_window = false;
     std::wstring class_name;
     bool foreground = false;
+    std::wstring executable_path;
 };
 
 [[nodiscard]] bool is_connected_browser_image(std::wstring_view image_name);

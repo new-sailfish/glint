@@ -378,6 +378,7 @@ BOOL CALLBACK enumerate_window(HWND window, LPARAM parameter) {
         .shell_window = window == context.shell_window || shell_class(class_name),
         .class_name = std::move(class_name),
         .foreground = window == context.foreground_window,
+        .executable_path = image,
     };
     if (!should_include_window(facts, context.own_process_id)) return TRUE;
 
@@ -676,6 +677,7 @@ Tab make_window_target(const WindowFacts& facts, std::wstring_view application) 
     target.window_handle = reinterpret_cast<std::uintptr_t>(facts.window);
     target.process_id = facts.process_id;
     target.process_creation_time = facts.process_creation_time;
+    target.executable_path = facts.executable_path;
     return target;
 }
 
@@ -695,6 +697,7 @@ Tab make_uia_tab_target(
     target.process_id = facts.process_id;
     target.process_creation_time = facts.process_creation_time;
     target.runtime_id = std::move(runtime_id);
+    target.executable_path = facts.executable_path;
     return target;
 }
 

@@ -67,20 +67,23 @@ std::wstring system_cmd_image(bool wow64 = false) {
 }
 } // namespace
 
-BrowserForegroundTarget::BrowserForegroundTarget(HANDLE process, DWORD pid) noexcept
-    : process_(process), pid_(pid) {}
+BrowserForegroundTarget::BrowserForegroundTarget(HANDLE process, DWORD pid, std::wstring executable_path) noexcept
+    : process_(process), pid_(pid), executable_path_(std::move(executable_path)) {}
 BrowserForegroundTarget::~BrowserForegroundTarget() { if (process_) CloseHandle(process_); }
 BrowserForegroundTarget::BrowserForegroundTarget(BrowserForegroundTarget&& other) noexcept
-    : process_(std::exchange(other.process_, nullptr)), pid_(std::exchange(other.pid_, 0)) {}
+    : process_(std::exchange(other.process_, nullptr)), pid_(std::exchange(other.pid_, 0)),
+      executable_path_(std::exchange(other.executable_path_, {})) {}
 BrowserForegroundTarget& BrowserForegroundTarget::operator=(BrowserForegroundTarget&& other) noexcept {
     if (this != &other) {
         if (process_) CloseHandle(process_);
         process_ = std::exchange(other.process_, nullptr);
         pid_ = std::exchange(other.pid_, 0);
+        executable_path_ = std::exchange(other.executable_path_, {});
     }
     return *this;
 }
 DWORD BrowserForegroundTarget::process_id() const noexcept { return pid_; }
+const std::wstring& BrowserForegroundTarget::executable_path() const noexcept { return executable_path_; }
 bool BrowserForegroundTarget::allow() const noexcept {
     return process_ && WaitForSingleObject(process_, 0) == WAIT_TIMEOUT &&
         AllowSetForegroundWindow(pid_) != FALSE;
@@ -90,6 +93,7 @@ namespace {
 struct ForegroundDiscovery {
     OwnedHandle process{};
     DWORD pid = 0;
+    std::wstring executable_path;
 };
 
 ForegroundDiscovery discover_browser_foreground_target(DWORD bridge_pid, std::wstring_view expected_bridge_image) {
@@ -135,7 +139,7 @@ ForegroundDiscovery discover_browser_foreground_target(DWORD bridge_pid, std::ws
             for (std::size_t i = 0; i <= depth; ++i) {
                 if (WaitForSingleObject(processes[i].get(), 0) != WAIT_TIMEOUT) return {};
             }
-            return {std::move(processes[depth]), pid};
+            return {std::move(processes[depth]), pid, std::move(chain.back().image)};
         }
         if (depth == 1 && !equal_image(chain.back().image, cmd_image) &&
             !equal_image(chain.back().image, wow64_cmd_image)) return {};
@@ -153,7 +157,7 @@ BrowserForegroundTarget BrowserForegroundTarget::from_bridge(DWORD bridge_pid) {
     if (!equal_image(image, process_image(GetCurrentProcess())) &&
         !bridge_installation::is_installed_bridge(image)) return {};
     auto discovered = discover_browser_foreground_target(bridge_pid, image);
-    return BrowserForegroundTarget(discovered.process.release(), discovered.pid);
+    return BrowserForegroundTarget(discovered.process.release(), discovered.pid, std::move(discovered.executable_path));
 }
 
 DWORD detail::select_browser_foreground_process(std::span<const ForegroundProcessInfo> chain,

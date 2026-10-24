@@ -28,6 +28,8 @@ public:
     // Call while Glint still owns the foreground, before queuing activation.
     // Resolving the browser process happens on the accept worker, not here.
     bool allow_foreground(ConnectionId id);
+    // Reads the browser path captured by the accept worker; never queries Shell.
+    [[nodiscard]] std::wstring executable_path(ConnectionId id) const;
     void stop();
 
 private:

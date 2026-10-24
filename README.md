@@ -37,6 +37,8 @@ selected automatically; press **Enter** to switch, or use the arrow keys to choo
 another result. Glint activates the selected browser tab or desktop window and
 brings it forward, restoring the window if it is minimized.
 
+Recent cards and search results show the application icon and name. Expanded connection details also show browser icons and retain profile names.
+
 The bottom status bar keeps browser connections compact. Click it or press
 **F2** for details. **Ctrl+F** returns to search and **F6** moves to connection
 controls; **Connect browser** stays available beside the status.

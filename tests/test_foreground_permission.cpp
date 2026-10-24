@@ -6,6 +6,14 @@
 #include <utility>
 #include <vector>
 
+namespace glint::win {
+struct BrowserForegroundTargetTestAccess {
+    static BrowserForegroundTarget owned_process(HANDLE process, DWORD pid, std::wstring executable_path) {
+        return BrowserForegroundTarget(process, pid, std::move(executable_path));
+    }
+};
+} // namespace glint::win
+
 namespace {
 using glint::win::BrowserForegroundTarget;
 using glint::win::detail::ForegroundProcessInfo;
@@ -85,14 +93,39 @@ void safe_default_and_real_process_rejection() {
     static_assert(!std::is_copy_constructible_v<BrowserForegroundTarget>);
     static_assert(std::is_nothrow_move_constructible_v<BrowserForegroundTarget>);
     BrowserForegroundTarget empty;
-    require(empty.process_id() == 0 && !empty.allow(), "empty target grants no permission");
+    require(empty.process_id() == 0 && empty.executable_path().empty() && !empty.allow(),
+        "empty target grants no permission and supplies no executable path");
     auto moved = std::move(empty);
     require(empty.process_id() == 0 && moved.process_id() == 0 && !moved.allow(), "empty moves remain inert");
-    require(BrowserForegroundTarget::from_bridge(0).process_id() == 0, "PID zero is rejected");
+    const auto invalid = BrowserForegroundTarget::from_bridge(0);
+    require(invalid.process_id() == 0 && invalid.executable_path().empty(), "PID zero is rejected without a path");
     // This CTest process is launched by CTest/PowerShell, not a browser.
     // Exercise WinAPI discovery without changing focus or granting any permission.
-    require(BrowserForegroundTarget::from_bridge(GetCurrentProcessId()).process_id() == 0,
+    const auto unrelated = BrowserForegroundTarget::from_bridge(GetCurrentProcessId());
+    require(unrelated.process_id() == 0 && unrelated.executable_path().empty(),
         "ordinary test process cannot identify an unrelated browser target");
+}
+
+void moves_preserve_cached_path_and_clear_the_previous_owner() {
+    const auto process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, GetCurrentProcessId());
+    require(process != nullptr, "test can pin its own process without changing foreground permissions");
+    auto original = glint::win::BrowserForegroundTargetTestAccess::owned_process(
+        process, GetCurrentProcessId(), L"C:\\Chrome\\chrome.exe");
+    auto moved = std::move(original);
+    require(moved.process_id() == GetCurrentProcessId() && moved.executable_path() == L"C:\\Chrome\\chrome.exe",
+        "move construction preserves browser process identity and cached full path");
+    require(original.process_id() == 0 && original.executable_path().empty(), "move construction clears the previous owner");
+
+    BrowserForegroundTarget assigned;
+    assigned = std::move(moved);
+    require(assigned.process_id() == GetCurrentProcessId() && assigned.executable_path() == L"C:\\Chrome\\chrome.exe",
+        "move assignment preserves browser process identity and cached full path");
+    require(moved.process_id() == 0 && moved.executable_path().empty(), "move assignment clears the previous owner");
+    assigned = std::move(assigned);
+    require(assigned.process_id() == GetCurrentProcessId() && assigned.executable_path() == L"C:\\Chrome\\chrome.exe",
+        "self move leaves the cached path associated with its pinned process");
+    assigned = BrowserForegroundTarget{};
+    require(assigned.process_id() == 0 && assigned.executable_path().empty(), "replacing with an empty target clears stale path metadata");
 }
 } // namespace
 
@@ -111,6 +144,7 @@ int wmain(int argc, wchar_t* argv[]) {
         rejects_wrong_images_and_non_browser_ancestors();
         rejects_pid_reuse_or_disconnected_chain();
         safe_default_and_real_process_rejection();
+        moves_preserve_cached_path_and_clear_the_previous_owner();
         std::cout << "Foreground permission tests passed\n";
         return 0;
     } catch (const std::exception& error) {

@@ -27,6 +27,7 @@ WindowFacts notepad_window() {
         .cloaked = false,
         .tool_window = false,
         .shell_window = false,
+        .executable_path = L"C:\\Windows\\System32\\Notepad.exe",
     };
 }
 
@@ -99,6 +100,8 @@ void window_targets_have_stable_keys_and_activation_identity() {
     assert(first.window_handle == reinterpret_cast<std::uintptr_t>(facts.window));
     assert(first.process_id == facts.process_id);
     assert(first.process_creation_time == facts.process_creation_time);
+    assert(first.executable_path == facts.executable_path);
+    assert(first.executable_path != facts.image_name);
 
     auto moved = facts;
     moved.window = reinterpret_cast<HWND>(static_cast<std::uintptr_t>(0x5678));
@@ -115,10 +118,24 @@ void uia_targets_preserve_runtime_id_and_selected_state() {
     assert(target.title == L"notes.txt");
     assert(target.active);
     assert(target.runtime_id == std::vector<int>({42, 77664444, 4, 38}));
+    assert(target.executable_path == facts.executable_path);
 
     const auto other = glint::desktop::make_uia_tab_target(
         facts, L"Notepad", 3, L"other.txt", false, {42, 77664444, 4, 39});
     assert(target.key != other.key);
+}
+
+void executable_paths_do_not_replace_process_identity_or_invent_missing_paths() {
+    auto facts = notepad_window();
+    const auto first = glint::desktop::make_window_target(facts, L"Notepad");
+    ++facts.process_creation_time;
+    const auto reused_pid = glint::desktop::make_window_target(facts, L"Notepad");
+    assert(first.key != reused_pid.key);
+    assert(first.executable_path == reused_pid.executable_path);
+
+    facts.executable_path.clear();
+    assert(glint::desktop::make_window_target(facts, L"Notepad").executable_path.empty());
+    assert(glint::desktop::make_uia_tab_target(facts, L"Notepad", 0, L"Untitled", true, {1}).executable_path.empty());
 }
 
 void desktop_search_matches_titles_applications_and_case() {
@@ -223,6 +240,7 @@ int main() {
         tab_item_title_uses_the_file_text_not_the_status_suffix();
         window_targets_have_stable_keys_and_activation_identity();
         uia_targets_preserve_runtime_id_and_selected_state();
+        executable_paths_do_not_replace_process_identity_or_invent_missing_paths();
         desktop_search_matches_titles_applications_and_case();
         recency_tracks_foreground_transitions_without_refreshing_background_tabs();
         recent_results_merge_sources_and_keep_unknown_times_unknown();
