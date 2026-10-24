@@ -88,6 +88,9 @@ function Invoke-FeedGit([string[]]$Arguments, [switch]$AllowMissing, [switch]$Al
     # Do not propagate transport diagnostics, which can include credentials.
     throw "Git update-feed $($Arguments[0]) failed (exit $code)."
   }
+  # Recognized statuses are successful script operations. Actions propagates
+  # LASTEXITCODE after invoking this script, including an early return.
+  $global:LASTEXITCODE = 0
   return [pscustomobject]@{ Code = $code; Output = ($output -join "`n") }
 }
 

@@ -6,6 +6,7 @@ $ErrorActionPreference = 'Stop'
 $source = Join-Path (Split-Path -Parent $PSScriptRoot) 'publish-update-feed.ps1'
 $temporaryParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $testDirectory = Join-Path $temporaryParent ('glint-update-feed-tests-' + [guid]::NewGuid().ToString('N'))
+$actionsWrapper = Join-Path $testDirectory 'actions-step.ps1'
 $failures = [Collections.Generic.List[string]]::new()
 $testCount = 0
 
@@ -63,6 +64,11 @@ function Invoke-Publish($Fixture, [string]$Version = '0.1.2') {
   & $source -Repository $Fixture.Remote -ReleaseDirectory $Fixture.Release -Version $Version -Commit ('a' * 40) | Out-Null
 }
 
+function Invoke-ActionsWrapper($Fixture, [string]$Mode = 'Publish', [string]$Version = '0.1.2', [string]$Repository = $Fixture.Remote) {
+  $output = & pwsh -NoProfile -File $actionsWrapper -Publisher $source -Mode $Mode -Repository $Repository -ReleaseDirectory $Fixture.Release -SiteDirectory $Fixture.Site -Version $Version -Commit ('a' * 40) 2>&1
+  return [pscustomobject]@{ Code = $LASTEXITCODE; Output = ($output -join "`n") }
+}
+
 function Read-RemoteFile($Fixture, [string]$Path) {
   return Invoke-Git $Fixture.Remote @('show', "refs/heads/update-feed:$Path")
 }
@@ -84,6 +90,15 @@ function Test-Case([string]$Name, [scriptblock]$Action) {
 
 try {
   New-Item -ItemType Directory -Path $testDirectory | Out-Null
+  # GitHub Actions invokes the script in-process and propagates LASTEXITCODE;
+  # running the publisher directly with pwsh -File does not reproduce that.
+  Set-Content -LiteralPath $actionsWrapper -Encoding utf8 -Value @'
+param([string]$Publisher, [string]$Mode, [string]$Repository, [string]$ReleaseDirectory, [string]$SiteDirectory, [string]$Version, [string]$Commit)
+$ErrorActionPreference = 'Stop'
+$global:LASTEXITCODE = 77
+& $Publisher -Mode $Mode -Repository $Repository -ReleaseDirectory $ReleaseDirectory -SiteDirectory $SiteDirectory -Version $Version -Commit $Commit
+if (Test-Path -LiteralPath variable:\LASTEXITCODE) { exit $LASTEXITCODE }
+'@
   Test-Case 'first publication creates an isolated feed with latest and pinned files' {
     $fixture = New-Fixture
     Set-Release $fixture
@@ -133,9 +148,11 @@ try {
   Test-Case 'rerunning an identical release creates no extra commit' {
     $fixture = New-Fixture
     Set-Release $fixture
-    Invoke-Publish $fixture
+    $result = Invoke-ActionsWrapper $fixture
+    Assert-True ($result.Code -eq 0) "Actions rejected first publication: $($result.Output)"
     $before = Invoke-Git $fixture.Remote @('rev-parse', 'refs/heads/update-feed')
-    Invoke-Publish $fixture
+    $result = Invoke-ActionsWrapper $fixture
+    Assert-True ($result.Code -eq 0) "Actions rejected an identical release: $($result.Output)"
     Assert-True ((Invoke-Git $fixture.Remote @('rev-parse', 'refs/heads/update-feed')) -eq $before) 'Identical release created another feed commit.'
   }
   Test-Case 'global Git attributes cannot change the published manifest bytes' {
@@ -221,7 +238,8 @@ try {
     Invoke-Publish $fixture '0.1.3'
     New-Item -ItemType Directory -Path $fixture.Site | Out-Null
     Set-Content -LiteralPath (Join-Path $fixture.Site 'index.html') 'product website'
-    & $source -Mode Stage -Repository $fixture.Remote -SiteDirectory $fixture.Site | Out-Null
+    $result = Invoke-ActionsWrapper $fixture -Mode Stage
+    Assert-True ($result.Code -eq 0) "Actions rejected staging the published feed: $($result.Output)"
     Assert-True ((Get-Content -LiteralPath (Join-Path $fixture.Site 'index.html') -Raw).Trim() -eq 'product website') 'Staging overwrote the website.'
     Assert-True ([IO.File]::Exists((Join-Path $fixture.Site 'updates/v0.1.2/Glint.exe'))) 'Staging omitted older pinned executable.'
     Assert-True ([IO.File]::Exists((Join-Path $fixture.Site 'updates/v0.1.3/Glint.exe'))) 'Staging omitted latest pinned executable.'
@@ -232,13 +250,25 @@ try {
     $fixture = New-Fixture
     New-Item -ItemType Directory -Path $fixture.Site | Out-Null
     Set-Content -LiteralPath (Join-Path $fixture.Site 'index.html') 'product website'
-    & $source -Mode Stage -Repository $fixture.Remote -SiteDirectory $fixture.Site | Out-Null
+    $result = Invoke-ActionsWrapper $fixture -Mode Stage
+    Assert-True ($result.Code -eq 0) "Actions rejected staging before the first release (exit $($result.Code)): $($result.Output)"
     Assert-True (-not [IO.Directory]::Exists((Join-Path $fixture.Site 'updates'))) 'Absent feed created a misleading updates directory.'
     Assert-True ([IO.File]::Exists((Join-Path $fixture.Site 'index.html'))) 'Absent feed removed the website.'
   }
   Test-Case 'transport failure is distinguished from an absent feed branch' {
     $fixture = New-Fixture
     Assert-Rejected { & $source -Mode Stage -Repository (Join-Path $fixture.Root 'missing.git') -SiteDirectory $fixture.Site } 'Git|remote|query|feed'
+    $result = Invoke-ActionsWrapper $fixture -Mode Stage -Repository (Join-Path $fixture.Root 'missing.git')
+    Assert-True ($result.Code -ne 0) 'Actions accepted a real transport failure.'
+    Assert-True ($result.Output -match 'Git update-feed ls-remote failed') 'Actions hid the real transport failure.'
+  }
+  Test-Case 'Actions rejects invalid release bytes before the first Git command' {
+    $fixture = New-Fixture
+    Set-Release $fixture
+    Set-Content -LiteralPath (Join-Path $fixture.Release 'Glint.exe') 'corrupt bytes'
+    $result = Invoke-ActionsWrapper $fixture
+    Assert-True ($result.Code -ne 0) 'Actions accepted a corrupt release.'
+    Assert-True ($result.Output -match 'hash does not match') 'Actions hid the release validation failure.'
   }
 } finally {
   $absolute = [IO.Path]::GetFullPath($testDirectory)
@@ -252,3 +282,5 @@ try {
 
 Write-Output "$testCount update-feed tests; $($failures.Count) failed."
 if ($failures.Count) { throw ($failures -join "`n") }
+# Expected failures above are assertions, not failures of this test script.
+$global:LASTEXITCODE = 0
