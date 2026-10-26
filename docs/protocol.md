@@ -58,11 +58,11 @@ message; reloading the updated extension enables synchronization.
 An incremental update uses the same tab fields in a nested `tab` object:
 
 Tabs may include `lastAccessed`, a nonnegative integer timestamp in epoch
-milliseconds. Missing or zero means the access time is unknown. This additive
-v1 field lets the desktop rank recently visited open tabs alongside desktop
-windows. The extension combines browser access times with observed activation
-and window-focus events; metadata refreshes do not create a new visit. Older
-extensions remain compatible and contribute tabs with an unknown access time.
+milliseconds. Missing or zero means no successful Glint activation has been
+recorded. This additive v1 field lets the desktop rank open tabs that the user
+activated from a Glint result alongside desktop windows. Browser events,
+browser-provided access times, and metadata refreshes do not create a new visit.
+Older extensions remain compatible and contribute tabs with an unknown access time.
 
 ```json
 {"type":"upsert","tab":{"tabId":3,"windowId":1,"index":0,

@@ -105,13 +105,11 @@ windows are restored; maximized windows keep their state. Glint checks the
 resulting focus and reports activation failure if the target cannot be brought
 forward.
 
-Opening Glint clears the query and shows up to six recently visited tabs and
-windows as cards, with the first card selected. Only currently open targets are
-included. Browser access times and desktop foreground changes determine the
-order. Desktop history is kept for the current Glint session; targets with no
-known access time follow the known recent targets in a stable order. Desktop
-discovery samples about once per second, so very brief window switches can be
-missed. Reload the browser extension after upgrading to enable access-time sync.
+Opening Glint clears the query and shows up to six open tabs and windows that
+were successfully activated from a Glint result during the current session,
+with the first card selected. Opening or focusing a target outside Glint does
+not change the order. Targets without a recorded Glint activation follow the
+known recent targets in a stable order.
 
 Tab and Shift+Tab cycle the cards, and Enter switches to the selected target.
 Clicking a card also switches to it. Typing replaces the cards with the usual

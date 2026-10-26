@@ -177,7 +177,6 @@
       this.syncQueue = Promise.resolve();
       this.index = new Map();
       this.accessTimes = new Map();
-      this.focusedWindowId = null;
       this.reconnectAttempt = 0;
       this.reconnectTimer = null;
       this.lastError = '';
@@ -190,7 +189,6 @@
       events.onCreated && events.onCreated.addListener(tab => this.queueEvent({kind: 'upsert', tabId: tab.id}));
       events.onUpdated && events.onUpdated.addListener(tabId => this.queueEvent({kind: 'upsert', tabId}));
       events.onActivated && events.onActivated.addListener(info => {
-        this.rememberAccess(info.tabId, this.now());
         this.queueEvent({kind: 'upsert', tabId: info.tabId});
       });
       events.onAttached && events.onAttached.addListener(tabId => this.queueEvent({kind: 'upsert', tabId}));
@@ -206,9 +204,6 @@
         this.queueEvent({kind: 'remove', tabId: removedTabId});
         this.queueEvent({kind: 'upsert', tabId: addedTabId});
       });
-      const windows = this.api.windows;
-      windows && windows.onFocusChanged && windows.onFocusChanged.addListener(
-        windowId => this.observeWindowFocus(windowId));
       this.listenersAttached = true;
     }
 
@@ -221,29 +216,10 @@
 
     normalizeCurrentTab(tab) {
       const normalized = normalizeTab(tab);
-      this.rememberAccess(normalized.tabId, normalized.lastAccessed);
-      normalized.lastAccessed = Math.max(normalized.lastAccessed, this.accessTimes.get(normalized.tabId) || 0);
+      // Chrome's lastAccessed value reflects browsing outside Glint. Recent
+      // cards must contain only targets successfully activated through Glint.
+      normalized.lastAccessed = this.accessTimes.get(normalized.tabId) || 0;
       return normalized;
-    }
-
-    async observeWindowFocus(windowId) {
-      if (!Number.isSafeInteger(windowId) || windowId < 0) {
-        this.focusedWindowId = null;
-        return;
-      }
-      if (this.focusedWindowId === windowId) return;
-      this.focusedWindowId = windowId;
-      const accessedAt = this.now();
-      try {
-        const tabs = await this.api.tabs.query({windowId, active: true});
-        for (const tab of tabs) {
-          if (!tab.active || tab.windowId !== windowId) continue;
-          this.rememberAccess(tab.id, accessedAt);
-          this.queueEvent({kind: 'upsert', tabId: tab.id});
-        }
-      } catch (error) {
-        this.logger('focused tab lookup failed', error);
-      }
     }
 
     queueEvent(event) {

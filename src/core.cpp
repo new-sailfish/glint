@@ -283,8 +283,12 @@ Tab parse_tab(const Json& item, ConnectionId id, const ConnectionInfo& info) {
     tab.profile_label = info.profile_label;
     tab.active = bool_field(item, "active");
     tab.pinned = bool_field(item, "pinned");
-    tab.last_accessed = integer_field(item, "lastAccessed", false);
-    if (tab.last_accessed < 0) fail("lastAccessed must be nonnegative");
+    // Recency is owned by Glint and confirmed only after a successful result
+    // activation. Validate the additive field for protocol compatibility, but
+    // never import browser-provided timestamps into the recent-card history.
+    const auto reported_access = integer_field(item, "lastAccessed", false);
+    if (reported_access < 0) fail("lastAccessed must be nonnegative");
+    tab.last_accessed = 0;
     return tab;
 }
 

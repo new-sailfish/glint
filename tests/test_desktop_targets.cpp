@@ -151,39 +151,35 @@ void desktop_search_matches_titles_applications_and_case() {
     assert(glint::desktop::search_targets(targets, L"").size() == 2);
 }
 
-void recency_tracks_foreground_transitions_without_refreshing_background_tabs() {
+void recency_tracks_explicit_activations_only() {
     auto facts = notepad_window();
     auto first = glint::desktop::make_uia_tab_target(facts, L"Notepad", 0, L"First", true, {1});
     auto second = glint::desktop::make_uia_tab_target(facts, L"Notepad", 1, L"Second", false, {2});
     std::vector<Tab> targets{first, second};
     glint::desktop::TargetRecencyTracker history;
-    history.update(targets, nullptr, 1000);
-    assert(targets[0].last_accessed == 0); // Selected in a background window is not visited.
-    history.update(targets, facts.window, 2000);
+    history.update(targets);
+    assert(targets[0].last_accessed == 0 && targets[1].last_accessed == 0);
+    history.record_activation(first, 2000);
+    history.update(targets);
     assert(targets[0].last_accessed == 2000 && targets[1].last_accessed == 0);
     targets[0].title = L"First renamed";
-    history.update(targets, facts.window, 3000);
+    history.update(targets);
     assert(targets[0].last_accessed == 2000);
     targets[0].active = false;
     targets[1].active = true;
-    history.update(targets, facts.window, 4000);
+    history.update(targets);
+    assert(targets[0].last_accessed == 2000 && targets[1].last_accessed == 0);
+    history.record_activation(second, 4000);
+    history.update(targets);
     assert(targets[0].last_accessed == 2000 && targets[1].last_accessed == 4000);
-    history.update(targets, nullptr, 5000);
-    history.update(targets, facts.window, 6000);
-    assert(targets[1].last_accessed == 6000);
 
-    // A temporary UIA fallback does not erase already observed tab history.
+    // A temporary UIA fallback does not erase explicitly recorded history.
     std::vector<Tab> fallback{glint::desktop::make_window_target(facts, L"Notepad")};
-    history.update(fallback, nullptr, 7000);
+    history.update(fallback);
     targets = {first, second};
-    history.update(targets, nullptr, 8000);
-    assert(targets[0].last_accessed == 2000 && targets[1].last_accessed == 6000);
-    facts.foreground = true;
-    fallback = {glint::desktop::make_window_target(facts, L"Notepad")};
-    history.update(fallback, facts.window, 9000);
-    assert(fallback[0].last_accessed == 9000);
-    history.update(fallback, facts.window, 10000);
-    assert(fallback[0].last_accessed == 9000);
+    history.update(targets);
+    assert(targets[0].last_accessed == 2000 && targets[1].last_accessed == 4000);
+    assert(fallback[0].last_accessed == 0);
 }
 
 void recent_results_merge_sources_and_keep_unknown_times_unknown() {
@@ -210,7 +206,7 @@ void recent_results_merge_sources_and_keep_unknown_times_unknown() {
     assert(unknown[0].last_accessed == 0);
 }
 
-void direct_foreground_observation_survives_an_older_background_scan() {
+void foreground_observations_do_not_change_recency() {
     auto first_facts = notepad_window();
     auto second_facts = first_facts;
     second_facts.window = reinterpret_cast<HWND>(static_cast<std::uintptr_t>(0x5678));
@@ -218,16 +214,17 @@ void direct_foreground_observation_survives_an_older_background_scan() {
     auto second = glint::desktop::make_window_target(second_facts, L"Second app");
     std::vector<Tab> targets{first, second};
     glint::desktop::TargetRecencyTracker history;
-    // A live foreground HWND is authoritative even before active flags refresh.
+    // Foreground observations are irrelevant until a user activates a result.
     assert(!targets[1].active);
-    history.update(targets, first_facts.window, 1000);
-    history.update(targets, second_facts.window, 3000);
-    assert(targets[0].last_accessed == 1000 && targets[1].last_accessed == 3000);
+    history.update(targets);
+    history.update(targets);
+    assert(targets[0].last_accessed == 0 && targets[1].last_accessed == 0);
+    history.record_activation(second, 3000);
     std::vector<Tab> delayed_scan{first, second};
-    history.update(delayed_scan, first_facts.window, 2000);
-    assert(delayed_scan[0].last_accessed == 1000 && delayed_scan[1].last_accessed == 3000);
-    history.update(delayed_scan, second_facts.window, 4000);
-    // The delayed scan must not revert the tracked foreground identity.
+    history.update(delayed_scan);
+    assert(delayed_scan[0].last_accessed == 0 && delayed_scan[1].last_accessed == 3000);
+    // A later scan cannot invent another visit or move the timestamp forward.
+    history.update(delayed_scan);
     assert(delayed_scan[1].last_accessed == 3000);
 }
 
@@ -242,9 +239,9 @@ int main() {
         uia_targets_preserve_runtime_id_and_selected_state();
         executable_paths_do_not_replace_process_identity_or_invent_missing_paths();
         desktop_search_matches_titles_applications_and_case();
-        recency_tracks_foreground_transitions_without_refreshing_background_tabs();
+        recency_tracks_explicit_activations_only();
         recent_results_merge_sources_and_keep_unknown_times_unknown();
-        direct_foreground_observation_survives_an_older_background_scan();
+        foreground_observations_do_not_change_recency();
         std::cout << "desktop target tests passed\n";
     } catch (const std::exception& error) {
         std::cerr << "desktop target test failed: " << error.what() << '\n';

@@ -117,7 +117,8 @@ struct Tab {
     std::wstring profile_label;
     bool active = false;
     bool pinned = false;
-    // Unix epoch milliseconds of an observed visit; zero means unknown.
+    // Unix epoch milliseconds of a successful Glint activation; zero means
+    // that the user has not activated this result through Glint.
     std::int64_t last_accessed = 0;
     std::wstring application;
     std::uintptr_t window_handle = 0;

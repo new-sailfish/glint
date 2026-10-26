@@ -45,30 +45,32 @@ test('normalizeTab keeps valid browser access times and rejects invalid values',
   }
 });
 
-test('snapshots and metadata refreshes retain recency without manufacturing visits', async () => {
+test('snapshots and browser events do not manufacture result visits', async () => {
   const {api, tabs} = fakeApi();
   tabs[0].lastAccessed = 1000;
   let now = 3000;
   const bridge = new TabBridge({api, now: () => now});
   const port = portFake(); readyBridge(bridge, port); bridge.attachListeners();
   await bridge.syncSnapshot();
-  assert.deepEqual([...bridge.index.values()].map(tab => tab.lastAccessed), [1000, 0]);
+  assert.deepEqual([...bridge.index.values()].map(tab => tab.lastAccessed), [0, 0],
+    'the browser API access time is not a Glint result visit');
   tabs[0].title = 'Renamed';
   api.tabs.onUpdated.forEach(fn => fn(1));
   await bridge.eventChain;
-  assert.equal(bridge.index.get(1).lastAccessed, 1000);
+  assert.equal(bridge.index.get(1).lastAccessed, 0);
   api.tabs.onActivated.forEach(fn => fn({tabId: 2, windowId: 10}));
   await bridge.eventChain;
-  assert.equal(bridge.index.get(2).lastAccessed, 3000);
+  assert.equal(bridge.index.get(2).lastAccessed, 0,
+    'activating a tab outside Glint does not add a recent visit');
   now = 5000;
   await bridge.syncSnapshot();
-  assert.equal(bridge.index.get(2).lastAccessed, 3000, 'a snapshot preserves the observed activation time');
+  assert.equal(bridge.index.get(2).lastAccessed, 0, 'a snapshot keeps result visits empty');
   api.tabs.onRemoved.forEach(fn => fn(2));
   await bridge.eventChain;
   assert.equal(bridge.accessTimes.has(2), false);
 });
 
-test('window focus records only its active tab and ignores losing or repeated focus', async () => {
+test('window focus changes do not manufacture result visits', async () => {
   const {api, tabs} = fakeApi();
   tabs.push({id: 3, windowId: 20, title: 'Other window', active: true});
   // Deliberately return all tabs: the bridge must still validate the focused window.
@@ -78,28 +80,28 @@ test('window focus records only its active tab and ignores losing or repeated fo
   await bridge.syncSnapshot();
   await Promise.all(api.windows.onFocusChanged.map(fn => fn(10)));
   await bridge.eventChain;
-  assert.deepEqual([...bridge.index.values()].map(tab => tab.lastAccessed), [1000, 0, 0]);
+  assert.deepEqual([...bridge.index.values()].map(tab => tab.lastAccessed), [0, 0, 0]);
   now = 2000;
   await Promise.all(api.windows.onFocusChanged.map(fn => fn(10)));
   await bridge.eventChain;
-  assert.equal(bridge.index.get(1).lastAccessed, 1000);
+  assert.equal(bridge.index.get(1).lastAccessed, 0);
   await Promise.all(api.windows.onFocusChanged.map(fn => fn(-1)));
   await Promise.all(api.windows.onFocusChanged.map(fn => fn(20)));
   await bridge.eventChain;
-  assert.equal(bridge.index.get(3).lastAccessed, 2000);
+  assert.equal(bridge.index.get(3).lastAccessed, 0);
 });
 
-test('real activation while desktop is disconnected survives the next snapshot', async () => {
+test('browser activation while desktop is disconnected does not become a result visit', async () => {
   const {api} = fakeApi();
   const bridge = new TabBridge({api, now: () => 1234});
   bridge.attachListeners();
   api.tabs.onActivated.forEach(fn => fn({tabId: 2, windowId: 10}));
   const port = portFake(); readyBridge(bridge, port);
   await bridge.syncSnapshot();
-  assert.equal(bridge.index.get(2).lastAccessed, 1234);
+  assert.equal(bridge.index.get(2).lastAccessed, 0);
 });
 
-test('activation of a newly created tab during a stale snapshot retains its observed time', async () => {
+test('a newly created tab during a stale snapshot has no result visit', async () => {
   const {api, tabs} = fakeApi();
   const bridge = new TabBridge({api, now: () => 1234});
   const port = portFake(); readyBridge(bridge, port); bridge.attachListeners();
@@ -111,24 +113,7 @@ test('activation of a newly created tab during a stale snapshot retains its obse
     return stale;
   };
   await bridge.syncSnapshot();
-  assert.equal(bridge.index.get(3).lastAccessed, 1234);
-});
-
-test('an older window-focus read cannot replace a newer activation timestamp', async () => {
-  const {api, tabs} = fakeApi();
-  let now = 1000;
-  const bridge = new TabBridge({api, now: () => now});
-  const port = portFake(); readyBridge(bridge, port); bridge.attachListeners();
-  let finishQuery;
-  api.tabs.query = () => new Promise(resolve => { finishQuery = resolve; });
-  const focused = api.windows.onFocusChanged[0](10);
-  now = 2000;
-  api.tabs.onActivated.forEach(fn => fn({tabId: 1, windowId: 10}));
-  await bridge.eventChain;
-  finishQuery(tabs.map(tab => ({...tab})));
-  await focused;
-  await bridge.eventChain;
-  assert.equal(bridge.index.get(1).lastAccessed, 2000);
+  assert.equal(bridge.index.get(3).lastAccessed, 0);
 });
 
 test('only validated language settings from a connected desktop can change extension language', async () => {

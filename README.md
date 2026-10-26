@@ -30,7 +30,9 @@ or URL, then return to the existing tab or application window.
 
 ## Features and workflow
 
-Press **Ctrl+Shift+Space** to see up to six recently visited open tabs or windows.
+Press **Ctrl+Shift+Space** to see up to six open tabs or windows that you
+successfully activated from a Glint result during this session. Opening or
+focusing a target elsewhere does not add it to the recent cards.
 Use **Tab / Shift+Tab** to select a card and **Enter** to switch. Start typing
 part of a title or URL to show the search list. The first result is
 selected automatically; press **Enter** to switch, or use the arrow keys to choose

@@ -647,7 +647,6 @@ private:
     }
 
     void show_search(bool reset_query = true) {
-        desktop_targets_.observe_foreground(GetForegroundWindow());
         if (reset_query) SetWindowTextW(edit_, L"");
         ShowWindow(window_, SW_SHOW); SetForegroundWindow(window_); SetFocus(edit_); SendMessageW(edit_, EM_SETSEL, 0, -1); refresh_results(true);
     }

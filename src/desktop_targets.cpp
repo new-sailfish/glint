@@ -404,8 +404,6 @@ BOOL CALLBACK enumerate_window(HWND window, LPARAM parameter) {
 struct ScanResult {
     std::vector<Tab> targets;
     bool uia_retryable = false;
-    HWND foreground_window = nullptr;
-    std::int64_t foreground_observed_at = 0;
 };
 
 ScanResult scan_windows(
@@ -415,13 +413,10 @@ ScanResult scan_windows(
     context.own_process_id = GetCurrentProcessId();
     context.shell_window = GetShellWindow();
     context.foreground_window = GetForegroundWindow();
-    const auto foreground_observed_at = access_time_now();
     context.descriptions = &descriptions;
     EnumWindows(enumerate_window, reinterpret_cast<LPARAM>(&context));
 
     ScanResult result;
-    result.foreground_window = context.foreground_window;
-    result.foreground_observed_at = foreground_observed_at;
     for (auto& window : context.windows) {
         auto application = application_name(window.facts.image_name, window.file_description);
         if (application.empty()) application = window.facts.class_name;
@@ -717,30 +712,17 @@ std::vector<Tab> search_targets(
     return result;
 }
 
-void TargetRecencyTracker::update(
-    std::span<Tab> targets, HWND foreground_window, std::int64_t now) {
-    std::optional<TabKey> foreground;
-    // A scan can finish after a more recent direct foreground observation.
-    // Merge its rows with history without letting its old focus sample win.
-    if (now >= latest_observation_) {
-        for (auto& target : targets) {
-            if (foreground_window && (target.key.source == TabSource::Window || target.active) &&
-                target.window_handle == reinterpret_cast<std::uintptr_t>(foreground_window)) {
-                foreground = target.key;
-                if (foreground != foreground_target_ && now > 0) {
-                    auto& previous = access_times_[target.key.target_id];
-                    previous = (std::max)(previous, now);
-                }
-                break;
-            }
-        }
-        foreground_target_ = std::move(foreground);
-        latest_observation_ = now;
-    }
+void TargetRecencyTracker::update(std::span<Tab> targets) {
     for (auto& target : targets) {
         const auto found = access_times_.find(target.key.target_id);
         target.last_accessed = found == access_times_.end() ? 0 : found->second;
     }
+}
+
+void TargetRecencyTracker::record_activation(const Tab& target, std::int64_t now) {
+    if (target.key.target_id.empty() || now <= 0) return;
+    auto& previous = access_times_[target.key.target_id];
+    previous = (std::max)(previous, now);
 }
 
 class DesktopTargetService::Impl : public std::enable_shared_from_this<DesktopTargetService::Impl> {
@@ -800,12 +782,6 @@ public:
         return targets_.size();
     }
 
-    void observe_foreground(HWND foreground_window) {
-        const auto observed_at = access_time_now();
-        std::lock_guard lock(mutex_);
-        recency_.update(targets_, foreground_window, observed_at);
-    }
-
     bool request_activation(const Tab& target) {
         {
             std::lock_guard lock(mutex_);
@@ -830,7 +806,7 @@ private:
         HWND notification_window = nullptr;
         {
             std::lock_guard lock(mutex_);
-            recency_.update(next.targets, next.foreground_window, next.foreground_observed_at);
+            recency_.update(next.targets);
             if (next.targets != targets_) {
                 targets_ = std::move(next.targets);
                 changed = true;
@@ -867,6 +843,9 @@ private:
                 std::lock_guard lock(mutex_);
                 activation_errors_.push_back(std::move(error));
                 report = true;
+            } else {
+                std::lock_guard lock(mutex_);
+                recency_.record_activation(target, access_time_now());
             }
         }
         if (report && notification_window_)
@@ -925,7 +904,6 @@ std::vector<Tab> DesktopTargetService::search(std::wstring_view query, std::size
     return impl_->search(query, limit);
 }
 std::size_t DesktopTargetService::target_count() const { return impl_->target_count(); }
-void DesktopTargetService::observe_foreground(HWND foreground_window) { impl_->observe_foreground(foreground_window); }
 bool DesktopTargetService::request_activation(const Tab& target) {
     return impl_->request_activation(target);
 }

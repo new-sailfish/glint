@@ -113,7 +113,8 @@ keyboard maps it to either key. Elsewhere in the list they retain native
 jump-to-first/page-up behavior; in the query they retain native editing behavior.
 
 An empty query uses the same native list-view in tile mode, with up to six
-recently accessed targets selected after merging all browser and desktop rows.
+targets successfully activated from Glint selected after merging all browser
+and desktop rows.
 The normal width uses two columns; narrow viewports use one. Tab/Shift+Tab cycle
 cards, arrows move through the grid, and Enter or a card click uses the existing
 activation path. Navigation keeps the native EDIT ready for typing. Text input
@@ -124,11 +125,11 @@ Ctrl+F selects the query, F6 moves between search and connection controls, and
 F2 expands/collapses the connection details. Each invocation clears the query.
 
 The optional protocol `lastAccessed` field carries epoch milliseconds and
-defaults to zero for older extensions. Browser API access times are merged with
-real activation/window-focus events; metadata refreshes do not create visits.
-Desktop discovery records changes of the foreground target, including the
-selected Notepad tab only when its window is foreground. This history lives in
-the current process and follows the existing one-second discovery cadence.
+defaults to zero for older extensions. The extension writes a timestamp only
+after a Glint activation succeeds; browser activation and window-focus events,
+browser-provided access times, and metadata refreshes do not create visits.
+Desktop discovery likewise only attaches timestamps recorded after a successful
+Glint activation. This history lives in the current process.
 Unknown times sort after known visits with a deterministic identity fallback.
 
 Result refreshes select the first match for a changed query or a newly opened
