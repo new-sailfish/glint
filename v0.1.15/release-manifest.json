@@ -1,0 +1,250 @@
+{
+  "Product": "Glint",
+  "Version": "0.1.15",
+  "FileVersion": "0.1.15.0",
+  "Commit": "c0388e97c47742fd94fd9cada33ed48970656438",
+  "WorkingTreeDirty": false,
+  "Binary": "Glint.exe",
+  "Files": [
+    {
+      "Path": "Glint.exe",
+      "SHA256": "20F30D2B052814EDF317E474F91EE5BF186DB8EA98A13898531F3B0F5F6EAFD4"
+    },
+    {
+      "Path": "README.md",
+      "SHA256": "BA63D2D6626E14A61FB0CE0FD0EF75B9FC661902ABD126BCE5609DD98D169AFB"
+    },
+    {
+      "Path": "README.zh-CN.md",
+      "SHA256": "443F7DFE79D55170CBD0868FB726094D5DCE80AE407A3B924E8C7A9717F82C0B"
+    },
+    {
+      "Path": "extension/_locales/en/messages.json",
+      "SHA256": "BD3396A362B7250D64D8BA36FE48EC2C5DB01B5A8B549DF356907B6660B4C13F"
+    },
+    {
+      "Path": "extension/_locales/zh_CN/messages.json",
+      "SHA256": "1D5436888F0355E559B1943840AD8B14378FC55C8BCAB900CF41F227CB681910"
+    },
+    {
+      "Path": "extension/_locales/zh_TW/messages.json",
+      "SHA256": "1D5436888F0355E559B1943840AD8B14378FC55C8BCAB900CF41F227CB681910"
+    },
+    {
+      "Path": "extension/test/background-core.test.js",
+      "SHA256": "F588244577E2E4416E181819318C8CA11D4C0D1D7E477FC628611192DF2B8360"
+    },
+    {
+      "Path": "extension/test/background.test.js",
+      "SHA256": "27AC9A4C7679DDAA165439FDF3DF6CE95DF4AF118C2C5B1BDEFB2A039317683D"
+    },
+    {
+      "Path": "extension/test/manifest.test.js",
+      "SHA256": "887DAEB878B3473C1D53B4B5DA853AC8DA3ECE101B1645ECD34FAB5014D4745D"
+    },
+    {
+      "Path": "extension/test/options.test.js",
+      "SHA256": "F6F6D01CA3682A702ECF2AA91574E0B7B4F1D815B426653A68F8345C13DE71D4"
+    },
+    {
+      "Path": "extension/background-core.js",
+      "SHA256": "3A13AD2FB3EA675313E1715B3F48CE7AB7A457774A4D387E916719F7ED3689D7"
+    },
+    {
+      "Path": "extension/background.js",
+      "SHA256": "28EF9B7F9E826FFE043A9E2983650F091D7812BE53DE6E2B9E3E76BC98C5880E"
+    },
+    {
+      "Path": "extension/host-manifest.chrome.json",
+      "SHA256": "B2AB171533E303952BE05D8FC1742F557ED28F574339124F8630DC481FAB1AC0"
+    },
+    {
+      "Path": "extension/host-manifest.edge.json",
+      "SHA256": "83C8CB56584525577A60CFA9956CBAF0D2F25D340B66CD734C31286880FA6F9E"
+    },
+    {
+      "Path": "extension/icon-128.png",
+      "SHA256": "705B31C8E85CB8DAAD2D382E2BAE1D369219AC5A70530D06959763898B5C2359"
+    },
+    {
+      "Path": "extension/icon-16.png",
+      "SHA256": "84098F23B722F65D9EC1BE4C22795149FE5E414B5266AFA40500BA357488E649"
+    },
+    {
+      "Path": "extension/icon-32.png",
+      "SHA256": "F1C1B42601827E2FC3D9A507AEEAF153B6FA4EE8AAA098446916753248DFBF24"
+    },
+    {
+      "Path": "extension/icon-48.png",
+      "SHA256": "50C99D6C0D4FC5BCCE33634BA340F0D5930BECD036AD43C4FE279E8C333EB56C"
+    },
+    {
+      "Path": "extension/manifest.json",
+      "SHA256": "AD8F53A59EE9AAAEF91A782EDC05B7411D0D26115DEDF4DB5E97A30C5C1B5F73"
+    },
+    {
+      "Path": "extension/options.html",
+      "SHA256": "92CB5430B43EB2C9B61190D63C2B02819A607E3D17BFE8279058FF57906D66CE"
+    },
+    {
+      "Path": "extension/options.js",
+      "SHA256": "2A3E4E8C9916D0B01FC6F82B170CDBCEA529D14D1E9A64F9B40947C0FDCC3C35"
+    },
+    {
+      "Path": "extension/package.json",
+      "SHA256": "0C97D4598E709A81FED6BC531947E772D54DDF6EBA91433A1C5C44B99ED31488"
+    },
+    {
+      "Path": "extension/README.md",
+      "SHA256": "778E87442D4668EFEEC705DF3F862A0EF2D27140C554FF6A55F5991A2953EB20"
+    },
+    {
+      "Path": "assets/glint-mark.svg",
+      "SHA256": "8CA313F8DA30F817C4A9D1C09C480F932F9916EFAAD05181F464A7B7C4DB0A1F"
+    },
+    {
+      "Path": "assets/glint.ico",
+      "SHA256": "962FB94D75882DE18B2BA3FE55091342C56AB3166EA5E684DD421A83031A0B46"
+    },
+    {
+      "Path": "assets/glint.png",
+      "SHA256": "8AC36D34ABABEA92BD5F66D13EC5F1EC443747B82BE9D474B4F8C6D236EDAB9D"
+    },
+    {
+      "Path": "docs/design.md",
+      "SHA256": "597076E446BEE9709AAC71598B6EADB2FD69942BDF6A7C5B62E70AED2C8CD40C"
+    },
+    {
+      "Path": "docs/protocol.md",
+      "SHA256": "CDE42D027A6C4FCCB91F0829C5A61E9D1CEA6507D7845128EB2E5C0CA9688317"
+    },
+    {
+      "Path": "docs/branding.md",
+      "SHA256": "2D66AF1D18461232A98830FF5F7090A7229EEBCB2742F452E46A098AC6F53DB5"
+    },
+    {
+      "Path": "docs/user-guide.md",
+      "SHA256": "D93DACE045C5061143FE0CBA266B4AE741CCEB99902501658A5E89FE5E342EB6"
+    },
+    {
+      "Path": "docs/development.md",
+      "SHA256": "F09D15F7B44CF9E1D29AE9BEA84FACD718403FCC1B87129766321074AFCF7426"
+    },
+    {
+      "Path": "docs/assets/README.md",
+      "SHA256": "2232F40081EF74087CD8A78706EDE36CBBD3EE83715A0CBD2F290C0AEF0ED44C"
+    },
+    {
+      "Path": "docs/assets/glint-banner.svg",
+      "SHA256": "D7FCF0E24AD212BB074C992EB1D3FBD37C2FCA2744B51691306BADEEC7B548C9"
+    },
+    {
+      "Path": "docs/assets/glint-logo.svg",
+      "SHA256": "D08F038BF59E0A018224F509F4F4359DE3912C2CA776C82E25F5FF30C3BDE99D"
+    },
+    {
+      "Path": "docs/assets/tab-overload.svg",
+      "SHA256": "9095BC500D7D0AA81C4C6B4D31627B2DACD92FE01CA83D1F5EF229AAD71C8927"
+    },
+    {
+      "Path": "docs/assets/tab-overload-en.svg",
+      "SHA256": "C1007F727DA233810D332973C7390B5FEC036CE3759649B06FBD259166131F9C"
+    },
+    {
+      "Path": "docs/assets/search.png",
+      "SHA256": "4C2152178AD7D28C83B6E7BC5CD180E03ED1BBA8C54278F508EA78AC76EB817F"
+    },
+    {
+      "Path": "docs/assets/setup-browser.png",
+      "SHA256": "FE4C4637996A67EE99A1C65F009959EA1E0459CEF3CE4537520E21C3A9719427"
+    },
+    {
+      "Path": "docs/assets/setup-load.png",
+      "SHA256": "79F2133635084A3D1694B4652AC62EE2E7AA727D2688F89B0D21C3EC925DAC84"
+    },
+    {
+      "Path": "docs/assets/setup-connected.png",
+      "SHA256": "3FFFFF1708548F0A45C255B5702541EC415D34CF5F649867170CB10FFFE32D1C"
+    },
+    {
+      "Path": "docs/assets/hotkey.png",
+      "SHA256": "8004F570D0DB21425B888C05AA022E7B2FBA32A266BC1A49901698907FDCC23D"
+    },
+    {
+      "Path": "docs/assets/search-en.png",
+      "SHA256": "521274E387EA420D6616256D1A3DDF9485F4316CE1854AFF7218E8A4B7541500"
+    },
+    {
+      "Path": "docs/assets/setup-browser-en.png",
+      "SHA256": "65555B938F8B6922F421883EFCC1F3CAB078084461265BFF1F397289F1EF2C44"
+    },
+    {
+      "Path": "docs/assets/setup-load-en.png",
+      "SHA256": "0C9992008111991FB6703C75F0D0C499827C9FF79CA17A296FF4CCDF011BC9F8"
+    },
+    {
+      "Path": "docs/assets/setup-connected-en.png",
+      "SHA256": "C6C9C63BFE0DE652B67D73FCC4C2E020A71B47062D495FF88E1368DB5CC10352"
+    },
+    {
+      "Path": "docs/assets/hotkey-en.png",
+      "SHA256": "0A99A7E7E4DE4E09B6E89BE23686ADFB81016F3F396A10EF2A7185F9327A67B1"
+    },
+    {
+      "Path": "docs/assets/architecture.svg",
+      "SHA256": "CFC069D6EEA8125A205BAF9FDBACCD3965C244D0FD5DCFB09ED0DF5C433BC8E1"
+    },
+    {
+      "Path": "docs/assets/architecture-en.svg",
+      "SHA256": "3BB007FBAC859CC61060C75DBEF836B82868B7BE1A989F7ED11EBFFE640A0B60"
+    },
+    {
+      "Path": "browser-extension/manifest.json",
+      "SHA256": "AD8F53A59EE9AAAEF91A782EDC05B7411D0D26115DEDF4DB5E97A30C5C1B5F73"
+    },
+    {
+      "Path": "browser-extension/background.js",
+      "SHA256": "28EF9B7F9E826FFE043A9E2983650F091D7812BE53DE6E2B9E3E76BC98C5880E"
+    },
+    {
+      "Path": "browser-extension/background-core.js",
+      "SHA256": "3A13AD2FB3EA675313E1715B3F48CE7AB7A457774A4D387E916719F7ED3689D7"
+    },
+    {
+      "Path": "browser-extension/options.html",
+      "SHA256": "92CB5430B43EB2C9B61190D63C2B02819A607E3D17BFE8279058FF57906D66CE"
+    },
+    {
+      "Path": "browser-extension/options.js",
+      "SHA256": "2A3E4E8C9916D0B01FC6F82B170CDBCEA529D14D1E9A64F9B40947C0FDCC3C35"
+    },
+    {
+      "Path": "browser-extension/icon-16.png",
+      "SHA256": "84098F23B722F65D9EC1BE4C22795149FE5E414B5266AFA40500BA357488E649"
+    },
+    {
+      "Path": "browser-extension/icon-32.png",
+      "SHA256": "F1C1B42601827E2FC3D9A507AEEAF153B6FA4EE8AAA098446916753248DFBF24"
+    },
+    {
+      "Path": "browser-extension/icon-48.png",
+      "SHA256": "50C99D6C0D4FC5BCCE33634BA340F0D5930BECD036AD43C4FE279E8C333EB56C"
+    },
+    {
+      "Path": "browser-extension/icon-128.png",
+      "SHA256": "705B31C8E85CB8DAAD2D382E2BAE1D369219AC5A70530D06959763898B5C2359"
+    },
+    {
+      "Path": "browser-extension/_locales/en/messages.json",
+      "SHA256": "BD3396A362B7250D64D8BA36FE48EC2C5DB01B5A8B549DF356907B6660B4C13F"
+    },
+    {
+      "Path": "browser-extension/_locales/zh_CN/messages.json",
+      "SHA256": "1D5436888F0355E559B1943840AD8B14378FC55C8BCAB900CF41F227CB681910"
+    },
+    {
+      "Path": "browser-extension/_locales/zh_TW/messages.json",
+      "SHA256": "1D5436888F0355E559B1943840AD8B14378FC55C8BCAB900CF41F227CB681910"
+    }
+  ]
+}
